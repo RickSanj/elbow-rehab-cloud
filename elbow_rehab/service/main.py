@@ -1,78 +1,32 @@
 import os
-import pathlib
+import uvicorn
 from datetime import datetime
 from typing import List
+from fastapi import FastAPI, HTTPException, Depends
 
-import uvicorn
-from fastapi import FastAPI, HTTPException, Depends, Security
-from google.cloud import bigquery
-from google.api_core.exceptions import NotFound
-import firebase_admin
-from firebase_admin import auth, credentials
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import firebase_admin                            # pyright: ignore[reportMissingImports]
+from firebase_admin import auth, credentials     # pyright: ignore[reportMissingImports]
 
 from elbow_rehab.service.domain.imu_reading import ImuReading
+from elbow_rehab.service.configure_infrastructure import get_project_id_and_dataset_and_table, initialize_bigquery_client, initialize_firebase_admin, ensure_infrastructure_exists
+from elbow_rehab.service.auth import get_user_id
 
 app = FastAPI()
 
-# --- Config ---
-PROJECT_ID = os.environ.get('PROJECT_ID', 'rehab-project-480112')
-OUTPUT_DATASET = os.environ.get('OUTPUT_DATASET', 'imu_data')
-OUTPUT_TABLE = os.environ.get('OUTPUT_TABLE', 'readings')
+PROJECT_ID, OUTPUT_DATASET, OUTPUT_TABLE = get_project_id_and_dataset_and_table()
 
-# Initialize Client
-bq_client = bigquery.Client(project=PROJECT_ID)
-if not firebase_admin._apps:
-    firebase_admin.initialize_app()
+bq_client = initialize_bigquery_client(PROJECT_ID)
+firebase_admin = initialize_firebase_admin()
 
-security = HTTPBearer()
-
-async def get_user_id(res: HTTPAuthorizationCredentials = Security(security)):
-    """
-    Decodes the Firebase ID Token and returns the 'uid'.
-    """
-    try:
-        # Verify the token sent from the Swift app
-        decoded_token = auth.verify_id_token(res.credentials)
-        return decoded_token['uid'] # This is the user's unique ID
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Invalid authentication: {str(e)}")
 
 def get_table_id():
     return f"{PROJECT_ID}.{OUTPUT_DATASET}.{OUTPUT_TABLE}"
 
-def ensure_infrastructure_exists():
-    """Checks if Dataset and Table exist, creates them if not."""
-    
-    # 1. Create Dataset if missing
-    dataset_id = f"{PROJECT_ID}.{OUTPUT_DATASET}"
-    try:
-        bq_client.get_dataset(dataset_id)
-    except NotFound:
-        dataset = bigquery.Dataset(dataset_id)
-        dataset.location = os.environ.get('LOCATION', 'europe-central2')
-        bq_client.create_dataset(dataset, timeout=30)
-        print(f"Created dataset {dataset_id}")
-
-    # 2. Create Table if missing
-    table_id = get_table_id()
-    try:
-        bq_client.get_table(table_id)
-    except NotFound:
-        current_directory = pathlib.Path(__file__).parent
-        schema_path = str(current_directory / "schema/imu_readings.json")
-        schema = bq_client.schema_from_json(schema_path)
-        
-        table = bigquery.Table(table_id, schema=schema)
-        bq_client.create_table(table)
-        print(f"Created table {table_id}")
 
 @app.on_event("startup")
 def startup_event():
-    # Verify DB setup on app start
-    ensure_infrastructure_exists()
+    ensure_infrastructure_exists(bq_client, PROJECT_ID, OUTPUT_DATASET, OUTPUT_TABLE)
 
-# --- NEW ENDPOINT HERE ---
 @app.get("/")
 def home():
     return {"message": "welcome"}
@@ -89,7 +43,6 @@ async def ingest_imu_readings(
     if not readings:
         return {"message": "No readings provided"}
 
-    # Prepare rows for insertion
     rows_to_insert = []
     current_time = datetime.now().isoformat()
     
@@ -97,11 +50,10 @@ async def ingest_imu_readings(
         row_dict = reading.model_dump() # Convert Pydantic model to dict
         row_dict['user_id'] = user_id 
         row_dict['ingestionDate'] = current_time
-        # Ensure timestamp is string for JSON serialization if needed
         row_dict['pc_time_iso'] = row_dict['pc_time_iso'].isoformat()
         rows_to_insert.append(row_dict)
 
-    # Insert rows (Streaming API)
+    # Insert rows
     errors = bq_client.insert_rows_json(get_table_id(), rows_to_insert)
 
     if errors:
