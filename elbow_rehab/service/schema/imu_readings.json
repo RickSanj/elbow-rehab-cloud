@@ -1,0 +1,89 @@
+[
+    {
+        "name": "user_id",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": "The Firebase UID of the user streaming the data"
+    },
+    {
+        "name": "pc_time_iso",
+        "type": "TIMESTAMP",
+        "mode": "REQUIRED",
+        "description": "Timestamp from the PC"
+    },
+    {
+        "name": "esp32_ms_A",
+        "type": "INTEGER",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "ax_A",
+        "type": "FLOAT",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "ay_A",
+        "type": "FLOAT",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "az_A",
+        "type": "FLOAT",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "gx_A",
+        "type": "FLOAT",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "gy_A",
+        "type": "FLOAT",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "gz_A",
+        "type": "FLOAT",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "esp32_ms_B",
+        "type": "INTEGER",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "ax_B",
+        "type": "FLOAT",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "ay_B",
+        "type": "FLOAT",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "az_B",
+        "type": "FLOAT",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "gx_B",
+        "type": "FLOAT",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "gy_B",
+        "type": "FLOAT",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "gz_B",
+        "type": "FLOAT",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "ingestionDate",
+        "type": "TIMESTAMP",
+        "mode": "NULLABLE"
+    }
+]
