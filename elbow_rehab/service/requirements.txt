@@ -3,3 +3,5 @@ uvicorn==0.34.3
 google-cloud-bigquery==3.34.0
 pydantic==2.9.0
 firebase-admin==6.6.0
+sqlalchemy==2.0.37
+psycopg2-binary==2.9.10

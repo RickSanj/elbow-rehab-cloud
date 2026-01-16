@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
+
 class ImuReading(BaseModel):
     pc_time_iso: datetime
     esp32_ms_A: int
@@ -18,4 +19,3 @@ class ImuReading(BaseModel):
     gx_B: float
     gy_B: float
     gz_B: float
-    
