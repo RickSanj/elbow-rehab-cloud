@@ -66,8 +66,7 @@ async def ingest_imu_readings(
     for reading in readings:
         row_dict = reading.model_dump()  # Convert Pydantic model to dict
         row_dict["user_id"] = user_id
-        row_dict["ingestionDate"] = current_time
-        row_dict["pc_time_iso"] = row_dict["pc_time_iso"].isoformat()
+        row_dict["ingestion_timestamp_iso"] = current_time
         rows_to_insert.append(row_dict)
 
     # Insert rows
@@ -75,6 +74,7 @@ async def ingest_imu_readings(
 
     if errors:
         print(f"Encountered errors while inserting rows: {errors}")
+        logger.error(f"Encountered errors while inserting rows: {errors}")
         raise HTTPException(
             status_code=500, detail=f"BigQuery Insertion Errors: {errors}"
         )

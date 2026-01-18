@@ -6,10 +6,15 @@
         "description": "The Firebase UID of the user streaming the data"
     },
     {
-        "name": "pc_time_iso",
-        "type": "TIMESTAMP",
+        "name": "session_time_iso",
+        "type": "STRING",
         "mode": "REQUIRED",
-        "description": "Timestamp from the PC"
+        "description": "Timestamp from the PC when the session started"
+    },
+    {
+        "name": "ingestion_timestamp_iso",
+        "type": "TIMESTAMP",
+        "mode": "NULLABLE"
     },
     {
         "name": "esp32_ms_A",
@@ -80,10 +85,5 @@
         "name": "gz_B",
         "type": "FLOAT",
         "mode": "REQUIRED"
-    },
-    {
-        "name": "ingestionDate",
-        "type": "TIMESTAMP",
-        "mode": "NULLABLE"
     }
 ]

@@ -4,7 +4,7 @@ from datetime import datetime
 
 
 class ImuReading(BaseModel):
-    pc_time_iso: datetime
+    session_time_iso: str
     esp32_ms_A: int
     esp32_ms_B: int
     ax_A: float
