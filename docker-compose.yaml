@@ -1,34 +1,41 @@
 services:
-  
   cloud-sql-proxy:
     image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.20.0
+    container_name: cloud-sql-proxy
+    user: root  # Add this to allow directory creation in the volume
     command:
+      - "--unix-socket=/cloudsql"
       - "${PROJECT_ID}:${LOCATION}:${INSTANCE_NAME}"
-      - "--address=0.0.0.0"
-      - "--port=5432"
       - "--credentials-file=/app/credentials.json"
     volumes:
       - ./credentials.json:/app/credentials.json:ro
+      - cloudsql_socket:/cloudsql
     networks:
       - rehab-network
+    restart: always
 
   app:
     build:
-      context: ./elbow_rehab/service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: elbow_rehab/service/Dockerfile
+    container_name: elbow-rehab-app
     depends_on:
       - cloud-sql-proxy
     ports:
       - "8080:8080"
     env_file:
       - .env
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
+      - PYTHONUNBUFFERED=True
     volumes:
       - ./credentials.json:/app/credentials.json:ro
-    environment:
-      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials.json
+      - cloudsql_socket:/cloudsql
     networks:
       - rehab-network
 
+volumes:
+  cloudsql_socket:
 
 networks:
   rehab-network:

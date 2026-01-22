@@ -7,9 +7,15 @@
     },
     {
         "name": "session_time_iso",
-        "type": "STRING",
+        "type": "TIMESTAMP",
         "mode": "REQUIRED",
         "description": "Timestamp from the PC when the session started"
+    },
+    {
+        "name": "session_id",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": "Unique identifier for the session"
     },
     {
         "name": "ingestion_timestamp_iso",

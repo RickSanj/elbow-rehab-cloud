@@ -3,6 +3,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from firebase_admin import auth, credentials, initialize_app
 from elbow_rehab.service.logger import get_logger
+from elbow_rehab.service.configure_infrastructure import require_env
 
 logger = get_logger()
 
@@ -13,10 +14,10 @@ try:
 except ValueError:
     pass
 
-socket_path = os.environ["INSTANCE_UNIX_SOCKET"]
-db_user = os.environ["DB_USER"]
-db_pass = os.environ["DB_PASS"]
-db_name = os.environ["DB_NAME"]
+socket_path = require_env("INSTANCE_UNIX_SOCKET")
+db_user = require_env("DB_USER")
+db_pass = require_env("DB_PASS")
+db_name = require_env("DB_NAME")
 
 DATABASE_URL = (
     f"postgresql+psycopg2://{db_user}:{db_pass}@/{db_name}?host={socket_path}"

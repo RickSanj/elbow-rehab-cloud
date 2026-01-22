@@ -1,5 +1,6 @@
 .idea
 .env
+gha-creds-*.json
 credentials.json
 target
 *.iml
