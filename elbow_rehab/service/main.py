@@ -19,11 +19,12 @@ from elbow_rehab.service.configure_infrastructure import (
 from elbow_rehab.service.auth import get_user_id
 from elbow_rehab.service.configure_database import sync_firebase_users_to_db
 from elbow_rehab.service.logger import get_logger
-from elbow_rehab.service.domain.calculations import process_session_angles
+from elbow_rehab.service.angle_calculation.calculations import process_session_angles
 from contextlib import asynccontextmanager
 
 logger = get_logger()
 logger.info("Service started successfully")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -32,6 +33,7 @@ async def lifespan(app: FastAPI):
     sync_firebase_users_to_db()
     yield
     # Shutdown logic (if any) can go here
+
 
 app = FastAPI(lifespan=lifespan)
 
@@ -49,8 +51,6 @@ firebase_admin = initialize_firebase_admin()
 #     sync_firebase_users_to_db()
 
 
-
-
 @app.get("/health")
 def health():
     return 200
@@ -64,16 +64,17 @@ def home():
 @app.get("/calculate_angles/")
 def calculate_angles(session_id: str):
     logger.info(f"Calculating angles for session_ID: {session_id}")
-    
+
     # Fetch from BigQuery
-    session_data = get_imu_reading_df(session_id) # Returns a pandas DF
-    
+    session_data = get_imu_reading_df(session_id)  # Returns a pandas DF
+
     if session_data.empty:
         raise HTTPException(status_code=404, detail="Session not found")
 
     processed_df = process_session_angles(session_data)
-    
+
     return {"message": processed_df.to_dict(orient="records")}
+
 
 @app.post("/imu/readings")
 async def ingest_imu_readings(

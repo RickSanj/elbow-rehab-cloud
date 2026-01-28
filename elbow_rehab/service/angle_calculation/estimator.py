@@ -1,4 +1,64 @@
 # calculate_angles.py
+# Simple calculation
+from __future__ import annotations
+import numpy as np
+from scipy.spatial.transform import Rotation as R
+
+class SimpleElbowEstimator:
+    def __init__(self, sample_rate_hz: float = 100.0):
+        pass
+
+    def rpy_to_matrix(self, roll, pitch, yaw):
+        """Convert roll, pitch, yaw to a 3×3 rotation matrix."""
+        return R.from_euler("xyz", [roll, pitch, yaw], degrees=True).as_matrix()
+
+
+    def normalize_fe(self, angle_deg: float) -> float:
+        return (angle_deg + 180) % 360 - 180
+
+
+    def normalize_ps(self, angle_deg: float) -> float:
+        return (angle_deg + 180) % 360 - 180
+
+
+    def median_smooth(self, series, window=10):
+        smoothed = []
+        for idx in range(len(series)):
+            start = max(0, idx - window + 1)
+            window_values = series[start : idx + 1]
+            smoothed.append(float(np.median(np.sort(window_values))))
+        return np.array(smoothed, dtype=float)
+
+
+    def orthonormalize(self, Rm):
+        """Project a noisy 3x3 matrix back onto SO(3) (proper rotation)."""
+        U, _, Vt = np.linalg.svd(Rm)
+        Rn = U @ Vt
+        if np.linalg.det(Rn) < 0:
+            U[:, -1] *= -1
+            Rn = U @ Vt
+        return Rn
+
+
+    def rotation_mean(self, mats):
+        """
+        Average a list of rotation matrices properly (not elementwise).
+        Uses scipy Rotation.mean() to compute a valid mean rotation.
+        """
+        rots = R.from_matrix(mats)
+        return rots.mean().as_matrix()
+
+
+    def update_angles(
+        self, R_A: np.ndarray, gyro_A: np.ndarray, R_B: np.ndarray, gyro_B: np.ndarray
+    ):
+        """Compute elbow flexion/extension and pronation/supination."""
+        R_rel = R_A.T @ R_B
+        flexion = np.degrees(np.arctan2(R_rel[2, 1], R_rel[2, 2]))
+        pronation = np.degrees(np.arctan2(R_rel[1, 0], R_rel[0, 0]))
+        return flexion, pronation
+
+
 # Alignment-free, self-calibrating elbow FE/PS angles (Müller et al., 2016)
 # - Real-time axis estimation via gradient descent on the windowed cost
 # - Two-stage step size, low-pass filtered cost, motion thresholds
@@ -9,14 +69,12 @@
 
 
 # ----------------------- Rotation utilities -----------------------
-from __future__ import annotations
 import numpy as np
+
 
 def skew(v: np.ndarray) -> np.ndarray:
     x, y, z = v
-    return np.array([[0, -z, y],
-                     [z,  0, -x],
-                     [-y, x,  0]])
+    return np.array([[0, -z, y], [z, 0, -x], [-y, x, 0]])
 
 
 def exp_so3(v: np.ndarray) -> np.ndarray:
@@ -36,8 +94,9 @@ def log_so3(R: np.ndarray) -> np.ndarray:
     theta = np.arccos(cos_theta)
     if theta < 1e-12:
         return np.array([0.0, 0.0, 0.0])
-    w = (1/(2*np.sin(theta))) * \
-        np.array([R[2, 1]-R[1, 2], R[0, 2]-R[2, 0], R[1, 0]-R[0, 1]])
+    w = (1 / (2 * np.sin(theta))) * np.array(
+        [R[2, 1] - R[1, 2], R[0, 2] - R[2, 0], R[1, 0] - R[0, 1]]
+    )
     return theta * w
 
 
@@ -45,32 +104,26 @@ def normalize(v: np.ndarray) -> np.ndarray:
     n = np.linalg.norm(v)
     return v if n == 0 else v / n
 
+
 # ----------------------- Axis parameterization -----------------------
 
 
 def sph_to_cart(theta: float, rho: float) -> np.ndarray:
     # (θ, ρ) → unit vector (x,y,z)
-    return np.array([
-        np.sin(theta) * np.cos(rho),
-        np.sin(theta) * np.sin(rho),
-        np.cos(theta)
-    ])
+    return np.array(
+        [np.sin(theta) * np.cos(rho), np.sin(theta) * np.sin(rho), np.cos(theta)]
+    )
 
 
 def dcart_dtheta(theta: float, rho: float) -> np.ndarray:
-    return np.array([
-        np.cos(theta) * np.cos(rho),
-        np.cos(theta) * np.sin(rho),
-        -np.sin(theta)
-    ])
+    return np.array(
+        [np.cos(theta) * np.cos(rho), np.cos(theta) * np.sin(rho), -np.sin(theta)]
+    )
 
 
 def dcart_drho(theta: float, rho: float) -> np.ndarray:
-    return np.array([
-        -np.sin(theta) * np.sin(rho),
-        np.sin(theta) * np.cos(rho),
-        0.0
-    ])
+    return np.array([-np.sin(theta) * np.sin(rho), np.sin(theta) * np.cos(rho), 0.0])
+
 
 # ----------------------- Estimator class -----------------------
 
@@ -88,12 +141,12 @@ class AlignmentFreeElbowEstimator:
         self.dt = 1.0 / sample_rate_hz
 
         # Paper defaults
-        self.M = 100                          # window size
-        self.step_ini = 0.02                  # initial step (rad)
-        self.step_fin = 0.004                 # final step (rad)
-        self.cost_thresh = 0.01               # J_LP threshold
-        self.min_axis_speed = 0.1             # rad/s (|alpha_dot|, |beta_dot|)
-        self.min_omega_r = 0.01               # ignore near-zero relative speed
+        self.M = 100  # window size
+        self.step_ini = 0.02  # initial step (rad)
+        self.step_fin = 0.004  # final step (rad)
+        self.cost_thresh = 0.01  # J_LP threshold
+        self.min_axis_speed = 0.1  # rad/s (|alpha_dot|, |beta_dot|)
+        self.min_omega_r = 0.01  # ignore near-zero relative speed
 
         # Initial axes (spherical) φ0 = [45°,45°, 90°,45°]
         self.theta_a = np.deg2rad(45.0)
@@ -118,7 +171,9 @@ class AlignmentFreeElbowEstimator:
         b_B = normalize(sph_to_cart(self.theta_b, self.rho_b))
         return a_A, b_B
 
-    def relative(self, R_A: np.ndarray, R_B: np.ndarray, gyro_A: np.ndarray, gyro_B: np.ndarray):
+    def relative(
+        self, R_A: np.ndarray, R_B: np.ndarray, gyro_A: np.ndarray, gyro_B: np.ndarray
+    ):
         """
         Returns R_BA (B in A), ω_A^A (local), ω_B^B (local), and ω_r^A per paper (Eq. 1)
         """
@@ -129,12 +184,14 @@ class AlignmentFreeElbowEstimator:
 
     # --------------- Compute α_k, β_k, normalized error e_n,k and cost increment ---------------
 
-    def alphas_betas_error(self, R_BA: np.ndarray, omega_r_A: np.ndarray, a_A: np.ndarray, b_B: np.ndarray):
+    def alphas_betas_error(
+        self, R_BA: np.ndarray, omega_r_A: np.ndarray, a_A: np.ndarray, b_B: np.ndarray
+    ):
         """
         Given axes a_A, b_B, compute least-squares α, β (Eq. 3) and normalized error e_n (Eq. 6).
         """
         b_A = R_BA @ b_B
-        M = np.column_stack([a_A, b_A])         # 3x2
+        M = np.column_stack([a_A, b_A])  # 3x2
         # Moore-Penrose via normal equations (2x2)
         MTM = M.T @ M
         if np.linalg.cond(MTM) > 1e8:  # near singular: axes colinear
@@ -193,10 +250,14 @@ class AlignmentFreeElbowEstimator:
         g_b_theta = -2.0 * term_b_theta
         g_b_rho = -2.0 * term_b_rho
 
-        g = np.array([g_a_theta if up_a else 0.0,
-                      g_a_rho if up_a else 0.0,
-                      g_b_theta if up_b else 0.0,
-                      g_b_rho if up_b else 0.0])
+        g = np.array(
+            [
+                g_a_theta if up_a else 0.0,
+                g_a_rho if up_a else 0.0,
+                g_b_theta if up_b else 0.0,
+                g_b_rho if up_b else 0.0,
+            ]
+        )
 
         gn = np.linalg.norm(g)
         if gn > 0:
@@ -208,7 +269,7 @@ class AlignmentFreeElbowEstimator:
             eps = np.deg2rad(2.0)
             if theta < eps:
                 theta = eps
-            if theta > np.pi-eps:
+            if theta > np.pi - eps:
                 theta = np.pi - eps
             return theta
 
@@ -220,7 +281,7 @@ class AlignmentFreeElbowEstimator:
         # wrap rhos into [-pi, pi] for stability
         for name in ("rho_a", "rho_b"):
             val = getattr(self, name)
-            val = (val + np.pi) % (2*np.pi) - np.pi
+            val = (val + np.pi) % (2 * np.pi) - np.pi
             setattr(self, name, val)
 
         # return α, β (useful for debug/thresholding) and current cost
@@ -253,17 +314,31 @@ class AlignmentFreeElbowEstimator:
 
             # Jacobian wrt alpha, beta ≈ [-[a_A]^ R_est]^vee and [-R_a [b_A]^]^vee around small error
             # Linearize: R_est * exp([δ]^)^T ≈ R_est (I - [δ]^)
-            J_alpha = - (skew(a_A) @ R_est)
-            J_beta = - (exp_so3(alpha * a_A) @ skew(b_A) @ exp_so3(beta * b_A))
+            J_alpha = -(skew(a_A) @ R_est)
+            J_beta = -(exp_so3(alpha * a_A) @ skew(b_A) @ exp_so3(beta * b_A))
             # Map to so(3) vector space with vee operator: for small δR ~ I + [v]^, vee([v]^) = v
             # Approx: r_err ≈ J_alpha_vee * dα + J_beta_vee * dβ
             # Use columns as: v_alpha = vee(J_alpha), v_beta = vee(J_beta)
-            v_alpha = np.array([J_alpha[2, 1]-J_alpha[1, 2],
-                                J_alpha[0, 2]-J_alpha[2, 0],
-                                J_alpha[1, 0]-J_alpha[0, 1]]) * 0.5
-            v_beta = np.array([J_beta[2, 1]-J_beta[1, 2],
-                               J_beta[0, 2]-J_beta[2, 0],
-                               J_beta[1, 0]-J_beta[0, 1]]) * 0.5
+            v_alpha = (
+                np.array(
+                    [
+                        J_alpha[2, 1] - J_alpha[1, 2],
+                        J_alpha[0, 2] - J_alpha[2, 0],
+                        J_alpha[1, 0] - J_alpha[0, 1],
+                    ]
+                )
+                * 0.5
+            )
+            v_beta = (
+                np.array(
+                    [
+                        J_beta[2, 1] - J_beta[1, 2],
+                        J_beta[0, 2] - J_beta[2, 0],
+                        J_beta[1, 0] - J_beta[0, 1],
+                    ]
+                )
+                * 0.5
+            )
             J = np.column_stack([v_alpha, v_beta])  # 3x2
             # damped least squares
             JTJ = J.T @ J + 1e-6 * np.eye(2)
@@ -275,7 +350,9 @@ class AlignmentFreeElbowEstimator:
 
     # --------------- Public API ---------------
 
-    def update(self, R_A: np.ndarray, gyro_A: np.ndarray, R_B: np.ndarray, gyro_B: np.ndarray):
+    def update_angles(
+        self, R_A: np.ndarray, gyro_A: np.ndarray, R_B: np.ndarray, gyro_B: np.ndarray
+    ):
         """
         One real-time step.
         gyro_* must be in rad/s (sensor local axes).

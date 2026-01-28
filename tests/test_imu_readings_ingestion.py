@@ -9,6 +9,7 @@ from elbow_rehab.service.auth import get_user_id
 def fake_get_user_id():
     return "test_user"
 
+
 app.dependency_overrides[get_user_id] = fake_get_user_id
 
 
@@ -31,6 +32,8 @@ data = {
     "gz_B": 0.0,
 }
 ENDPOINT = "http://localhost:8080/imu/readings"
+
+
 def test_ingest_imu_readings():
     response = requests.post(
         url=ENDPOINT,

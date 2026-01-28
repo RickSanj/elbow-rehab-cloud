@@ -27,7 +27,9 @@ def test_imu_reading_model():
         "gz_B": 0.0,
     }
 
-    imu_reading = ImuReading(**raw_reading, user_id=user_id, session_time_iso=session_time_iso)
+    imu_reading = ImuReading(
+        **raw_reading, user_id=user_id, session_time_iso=session_time_iso
+    )
 
     # basic fields
     assert imu_reading.user_id == user_id
