@@ -6,8 +6,11 @@ from elbow_rehab.service.angle_calculation.estimator import (
     AlignmentFreeElbowEstimator,
     SimpleElbowEstimator,
 )
-from elbow_rehab.service.angle_calculation.settings import DEFAULT_SAMPLE_RATE_HZ, DEFAULT_ESTIMATOR
-from elbow_rehab.service.angle_calculation.calibration import calibrate_gyro
+from elbow_rehab.service.angle_calculation.settings import (
+    DEFAULT_SAMPLE_RATE_HZ,
+    DEFAULT_ESTIMATOR,
+)
+from elbow_rehab.service.angle_calculation.calibration import calibrate_gyro_acc
 from elbow_rehab.service.analytics.raw_data_plots import get_file_path, plot_angles
 
 
@@ -16,7 +19,9 @@ def get_filter(sample_rate) -> MadgwickFilter:
     return filter
 
 
-def get_estimator(estimator_type, sample_rate) -> SimpleElbowEstimator | AlignmentFreeElbowEstimator:
+def get_estimator(
+    estimator_type, sample_rate
+) -> SimpleElbowEstimator | AlignmentFreeElbowEstimator:
     estimator = estimator_type
     if estimator_type == "simple":
         estimator = SimpleElbowEstimator(sample_rate)
@@ -46,7 +51,7 @@ def process_session_angles(
     pronations = []
 
     # Calibrate Gyroscope
-    calibrated_session_df = calibrate_gyro(session_df)
+    calibrated_session_df = calibrate_gyro_acc(session_df)
 
     # Iterate through rows (must be sorted by timestamp)
     # Assuming session_df is sorted by esp32_ms_A or a similar index
@@ -71,7 +76,7 @@ def process_session_angles(
     calibrated_session_df["pronation_deg"] = pronations
     path = f"{get_file_path(calibrated_session_df)}/angles_by_session.csv"
     calibrated_session_df.to_csv(path, index=False)
-    
+
     plot_angles(calibrated_session_df)
 
     return calibrated_session_df

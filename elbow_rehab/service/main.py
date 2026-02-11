@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException, Depends
 import firebase_admin  # pyright: ignore[reportMissingImports]
 from firebase_admin import auth, credentials  # pyright: ignore[reportMissingImports]
 
-from elbow_rehab.service.big_query import get_imu_reading_df
+from elbow_rehab.service.big_query import get_imu_reading_df, get_angles_df, load_calculated_angles
 from elbow_rehab.service.domain.imu_reading import ImuReading
 from elbow_rehab.service.configure_infrastructure import (
     initialize_bigquery_client,
@@ -25,30 +25,23 @@ from contextlib import asynccontextmanager
 logger = get_logger()
 logger.info("Service started successfully")
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup logic
-    ensure_infrastructure_exists(bq_client, PROJECT_ID, OUTPUT_DATASET, OUTPUT_TABLE)
-    sync_firebase_users_to_db()
-    yield
-    # Shutdown logic (if any) can go here
+    print("=== REGISTERED ROUTES ===")
+    for r in app.routes:
+        methods = ",".join(r.methods or [])
+        print(f"{methods:10s} {r.path}")
 
+    yield
 
 app = FastAPI(lifespan=lifespan)
 
 PROJECT_ID = require_env("PROJECT_ID")
 OUTPUT_DATASET = require_env("OUTPUT_DATASET")
-OUTPUT_TABLE = require_env("OUTPUT_TABLE")
+IMU_READINGS_TABLE = require_env("IMU_READINGS_TABLE")
 
 bq_client = initialize_bigquery_client(PROJECT_ID)
 firebase_admin = initialize_firebase_admin()
-
-
-# @app.on_event("startup")
-# def startup_event():
-#     ensure_infrastructure_exists(bq_client, PROJECT_ID, OUTPUT_DATASET, OUTPUT_TABLE)
-#     sync_firebase_users_to_db()
 
 
 @app.get("/health")
@@ -60,19 +53,27 @@ def health():
 def home():
     return {"message": "welcome"}
 
+@app.get("/session_report/{session_id}")
+def session_report(session_id: str):
+    logger.info(f"Generating report for session_ID: {session_id}")
+    # Fetch from BigQuery
+    session_data = get_angles_df(session_id)
+    if session_data.empty:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return compute_session_report(session_data)
 
-@app.get("/calculate_angles/")
+@app.get("/calculate_angles/{session_id}")
 def calculate_angles(session_id: str):
     logger.info(f"Calculating angles for session_ID: {session_id}")
 
     # Fetch from BigQuery
-    session_data = get_imu_reading_df(session_id)  # Returns a pandas DF
+    session_data = get_imu_reading_df(session_id)
 
     if session_data.empty:
         raise HTTPException(status_code=404, detail="Session not found")
 
     processed_df = process_session_angles(session_data)
-
+    load_calculated_angles(processed_df)
     return {"message": processed_df.to_dict(orient="records")}
 
 

@@ -30,11 +30,11 @@ def require_env(name: str) -> str:
 
 PROJECT_ID = require_env("PROJECT_ID")
 OUTPUT_DATASET = require_env("OUTPUT_DATASET")
-OUTPUT_TABLE = require_env("OUTPUT_TABLE")
+IMU_READINGS_TABLE = require_env("IMU_READINGS_TABLE")
 
 
 def get_table_id() -> str:
-    return f"{PROJECT_ID}.{OUTPUT_DATASET}.{OUTPUT_TABLE}"
+    return f"{PROJECT_ID}.{OUTPUT_DATASET}.{IMU_READINGS_TABLE}"
 
 
 def initialize_bigquery_client(project_id: str):
@@ -77,11 +77,3 @@ def ensure_infrastructure_exists(
         # table = bigquery.Table(table_id, schema=schema)
         # bq_client.create_table(table)
         # logger.info(f"Created table {table_id}")
-
-
-# def get_session_data_frame(bq_client: bigquery.Client, project_id: str, output_dataset: str, output_table: str, user_id: str, session_time_iso: str):
-#     """Gets the session data frame from BigQuery."""
-#     table_id = f"{project_id}.{output_dataset}.{output_table}"
-#     query = f"SELECT * FROM `{table_id}` WHERE user_id = '{user_id}' AND session_time_iso = '{session_time_iso}'"
-#     query_job = bq_client.query(query)
-#     return query_job.to_dataframe()

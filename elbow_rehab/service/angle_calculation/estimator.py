@@ -4,6 +4,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+
 class SimpleElbowEstimator:
     def __init__(self, sample_rate_hz: float = 100.0):
         pass
@@ -12,14 +13,11 @@ class SimpleElbowEstimator:
         """Convert roll, pitch, yaw to a 3×3 rotation matrix."""
         return R.from_euler("xyz", [roll, pitch, yaw], degrees=True).as_matrix()
 
-
     def normalize_fe(self, angle_deg: float) -> float:
         return (angle_deg + 180) % 360 - 180
 
-
     def normalize_ps(self, angle_deg: float) -> float:
         return (angle_deg + 180) % 360 - 180
-
 
     def median_smooth(self, series, window=10):
         smoothed = []
@@ -28,7 +26,6 @@ class SimpleElbowEstimator:
             window_values = series[start : idx + 1]
             smoothed.append(float(np.median(np.sort(window_values))))
         return np.array(smoothed, dtype=float)
-
 
     def orthonormalize(self, Rm):
         """Project a noisy 3x3 matrix back onto SO(3) (proper rotation)."""
@@ -39,7 +36,6 @@ class SimpleElbowEstimator:
             Rn = U @ Vt
         return Rn
 
-
     def rotation_mean(self, mats):
         """
         Average a list of rotation matrices properly (not elementwise).
@@ -47,7 +43,6 @@ class SimpleElbowEstimator:
         """
         rots = R.from_matrix(mats)
         return rots.mean().as_matrix()
-
 
     def update_angles(
         self, R_A: np.ndarray, gyro_A: np.ndarray, R_B: np.ndarray, gyro_B: np.ndarray

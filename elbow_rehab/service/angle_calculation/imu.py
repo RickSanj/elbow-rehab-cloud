@@ -12,7 +12,9 @@ from filters.EKF import ExtendedKalmanFilter
 from filters.Madgwick import MadgwickFilter
 
 from preprocess import preprocess
-from settings import DEFAULT_SAMPLE_RATE_HZ #todo remove global var from heere, default value should be initialized in calculations
+from settings import (
+    DEFAULT_SAMPLE_RATE_HZ,
+)  # todo remove global var from heere, default value should be initialized in calculations
 
 
 @dataclass(frozen=True)

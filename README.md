@@ -20,7 +20,8 @@ export DB_USER=postgres
 export DB_PASS='pTD\qf">dOI,Zh0T'
 export DB_NAME=rehab-data
 export OUTPUT_DATASET=rehab_data
-export OUTPUT_TABLE=imu_readings
+export IMU_READINGS_TABLE=imu_readings
+export CALCULATED_ANGLES_TABLE=calculated_angles
 
 docker buildx build \
   --platform linux/amd64 \
@@ -39,7 +40,9 @@ gcloud run deploy ${SERVICE_NAME} \
 PROJECT_ID=${PROJECT_ID}|\
 LOCATION=${LOCATION}|\
 OUTPUT_DATASET=${OUTPUT_DATASET}|\
-OUTPUT_TABLE=${OUTPUT_TABLE}|\
+IMU_READINGS_TABLE=${IMU_READINGS_TABLE}|\
+CALCULATED_ANGLES_TABLE=${CALCULATED_ANGLES_TABLE}|\
+OUTPUT_TABLE=${IMU_READINGS_TABLE}|\
 DB_USER=${DB_USER}|\
 DB_PASS=${DB_PASS}|\
 DB_NAME=${DB_NAME}|\

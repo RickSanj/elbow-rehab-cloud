@@ -8,6 +8,7 @@ GYRO_COLS_B = ["gx_B", "gy_B", "gz_B"]
 ACCEL_COLS_A = ["ax_A", "ay_A", "az_A"]
 ACCEL_COLS_B = ["ax_B", "ay_B", "az_B"]
 
+
 def get_file_path(df):
     session_time = df["session_time_iso"].iloc[0]
     output_dir = Path(f"data/{session_time.strftime('%Y%m%d_%H%M%S')}")
@@ -56,32 +57,65 @@ def plot_imu_readings(df, title_prefix="IMU"):
     plt.close(fig)
 
 
-
 def plot_gyro_calibration(df_before, df_after):
-    fig, axes = plt.subplots(3, 2, figsize=(14, 10), sharex=True, constrained_layout=True)
+    fig, axes = plt.subplots(
+        3, 2, figsize=(14, 10), sharex=True, constrained_layout=True
+    )
     axes = axes.ravel()
 
     for i, col in enumerate(GYRO_COLS_A):
         ax = axes[i]
         ax.plot(df_before.index, df_before[col], label=f"{col} raw", alpha=0.6)
         ax.plot(df_after.index, df_after[col], label=f"{col} calibrated", alpha=0.8)
-        ax.set_title(f"Sensor A - {col.replace('_A','').upper()} Axis")
+        ax.set_title(f"Sensor A - {col.replace('_A', '').upper()} Axis")
         ax.legend(fontsize=8)
         ax.set_ylabel("Gyro (rad/s)")
 
     for i, col in enumerate(GYRO_COLS_B):
-        ax = axes[i+3]
+        ax = axes[i + 3]
         ax.plot(df_before.index, df_before[col], label=f"{col} raw", alpha=0.6)
         ax.plot(df_after.index, df_after[col], label=f"{col} calibrated", alpha=0.8)
-        ax.set_title(f"Sensor B - {col.replace('_B','').upper()} Axis")
+        ax.set_title(f"Sensor B - {col.replace('_B', '').upper()} Axis")
         ax.legend(fontsize=8)
         ax.set_ylabel("Gyro (rad/s)")
 
     axes[-1].set_xlabel("Timestamp")
-    plt.suptitle("Gyroscope Calibration Comparison (Raw vs Bias-Corrected)", fontsize=16)
+    plt.suptitle(
+        "Gyroscope Calibration Comparison (Raw vs Bias-Corrected)", fontsize=16
+    )
     plt.savefig(f"{get_file_path(df_after)}/gyro_calibration.png")
     plt.close(fig)
-    
+
+
+def plot_acc_calibration(df_before, df_after):
+    fig, axes = plt.subplots(
+        3, 2, figsize=(14, 10), sharex=True, constrained_layout=True
+    )
+    axes = axes.ravel()
+
+    for i, col in enumerate(ACCEL_COLS_A):
+        ax = axes[i]
+        ax.plot(df_before.index, df_before[col], label=f"{col} raw", alpha=0.6)
+        ax.plot(df_after.index, df_after[col], label=f"{col} calibrated", alpha=0.8)
+        ax.set_title(f"Sensor A - {col.replace('_A', '').upper()} Axis")
+        ax.legend(fontsize=8)
+        ax.set_ylabel("Acceleration (m/s²)")
+
+    for i, col in enumerate(ACCEL_COLS_B):
+        ax = axes[i + 3]
+        ax.plot(df_before.index, df_before[col], label=f"{col} raw", alpha=0.6)
+        ax.plot(df_after.index, df_after[col], label=f"{col} calibrated", alpha=0.8)
+        ax.set_title(f"Sensor B - {col.replace('_B', '').upper()} Axis")
+        ax.legend(fontsize=8)
+        ax.set_ylabel("Acceleration (m/s²)")
+
+    axes[-1].set_xlabel("Timestamp")
+    plt.suptitle(
+        "Accelerometer Calibration Comparison (Raw vs Bias-Corrected)", fontsize=16
+    )
+    plt.savefig(f"{get_file_path(df_after)}/acc_calibration.png")
+    plt.close(fig)
+
 
 def plot_angles(df):
     fig, axes = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
@@ -101,4 +135,3 @@ def plot_angles(df):
     plt.tight_layout()
     plt.savefig(f"{get_file_path(df)}/angles.png")
     plt.close(fig)
-

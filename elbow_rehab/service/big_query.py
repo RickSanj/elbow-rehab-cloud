@@ -1,25 +1,57 @@
-import bigframes.pandas as bpd
+import pandas_gbq
+from pandas import DataFrame
 from elbow_rehab.service.logger import get_logger
 from elbow_rehab.service.configure_infrastructure import require_env
 
+from logging import getLogger
+
+
 logger = get_logger()
+getLogger("pandas_gbq").parent = logger
+getLogger("pandas_gbq").propagate = True
 
 
 PROJECT_ID = require_env("PROJECT_ID")
 OUTPUT_DATASET = require_env("OUTPUT_DATASET")
-OUTPUT_TABLE = require_env("OUTPUT_TABLE")
+IMU_READINGS_TABLE = require_env("IMU_READINGS_TABLE")
+CALCULATED_ANGLES_TABLE = require_env("CALCULATED_ANGLES_TABLE")
 
-IMU_READINGS_TABLE = f"{PROJECT_ID}.{OUTPUT_DATASET}.{OUTPUT_TABLE}"
+IMU_READINGS_TABLE = f"{PROJECT_ID}.{OUTPUT_DATASET}.{IMU_READINGS_TABLE}"
+CALCULATED_ANGLES_TABLE = f"{PROJECT_ID}.{OUTPUT_DATASET}.{CALCULATED_ANGLES_TABLE}"
 
-bpd.options.bigquery.project = PROJECT_ID
-bpd.options.bigquery.ordering_mode = "partial"
+
+def get_angles_df(session_id: str):
+    query = f"""
+    SELECT * 
+    FROM `{CALCULATED_ANGLES_TABLE}`
+    WHERE session_id = '{session_id}'
+    """
+
+    df = pandas_gbq.read_gbq(query, project_id=PROJECT_ID)
+    return df
 
 
 def get_imu_reading_df(session_id: str):
-    query = f"SELECT * FROM `{IMU_READINGS_TABLE}` WHERE session_id = '{session_id}'"
+    query = f"""
+    SELECT * 
+    FROM `{IMU_READINGS_TABLE}`
+    WHERE session_id = '{session_id}'
+    """
 
-    df = bpd.read_gbq(query)
-    pandas_df = df.to_pandas()
-    pandas_df = pandas_df.sort_values(by="esp32_ms_A")
+    df = pandas_gbq.read_gbq(query, project_id=PROJECT_ID)
+    return df
 
-    return pandas_df
+
+def load_calculated_angles(df: DataFrame):
+    """Loads specific rehab metrics back to BigQuery."""
+    logger.info("Loading calculated angles")
+
+    angles_df = df[['session_id', 'flexion_deg', 'pronation_deg', 'esp32_ms_A']]
+
+    pandas_gbq.to_gbq(
+        angles_df,
+        CALCULATED_ANGLES_TABLE,
+        project_id=PROJECT_ID,
+        if_exists="replace"
+    )
+    return

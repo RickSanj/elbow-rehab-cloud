@@ -13,6 +13,7 @@ G = 9.81
 # Helpers
 # ============================================================
 
+
 def is_valid_quaternion(q: np.ndarray) -> bool:
     return (
         isinstance(q, np.ndarray)
@@ -34,6 +35,7 @@ def integrate_orientation(R_wb: R, gyro: np.ndarray, dt: float) -> R:
 # ============================================================
 # Tests
 # ============================================================
+
 
 def test_initial_state_is_identity():
     f = MadgwickFilter(frequency=100)
