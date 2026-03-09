@@ -2,8 +2,8 @@ import pytest
 import fastapi
 import requests
 from fastapi.testclient import TestClient  # pyright: ignore[reportMissingImports]
-from elbow_rehab.service.main import app
-from elbow_rehab.service.auth import get_user_id
+from src.service.main import app
+from src.service.auth import get_user_id
 
 
 def fake_get_user_id():

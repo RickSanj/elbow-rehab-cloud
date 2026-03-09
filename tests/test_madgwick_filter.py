@@ -3,8 +3,8 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation as R
 
-from elbow_rehab.service.angle_calculation.filters.madgwick import MadgwickFilter
-from elbow_rehab.service.angle_calculation.filters.base_filter import BaseFilter
+from src.angle_calculation.filters.madgwick import MadgwickFilter
+from src.angle_calculation.filters.base_filter import BaseFilter
 
 G = 9.81
 

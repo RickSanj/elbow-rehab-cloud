@@ -3,7 +3,7 @@ Test the ImuReading Pydantic model
 """
 
 from datetime import datetime, timezone
-from elbow_rehab.service.domain.imu_reading import ImuReading
+from src.models.imu_reading import ImuReading
 
 
 def test_imu_reading_model():

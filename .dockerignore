@@ -1,0 +1,17 @@
+.idea
+.env
+gha-creds-*.json
+credentials.json
+target
+*.iml
+**/avro/generated
+.DS_Store
+venv
+.envrc
+.ruff_cache
+*.egg-info
+*.pytest_cache
+__pycache__
+.git
+.gitignore
+.data
