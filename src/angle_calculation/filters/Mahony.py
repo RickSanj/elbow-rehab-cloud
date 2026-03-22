@@ -1,6 +1,6 @@
 from ahrs.filters import Mahony
 import numpy as np
-from filters.base_filter import BaseFilter
+from .base_filter import BaseFilter
 
 
 class MahonyFilter(BaseFilter):
@@ -19,7 +19,6 @@ class MahonyFilter(BaseFilter):
         Keeps quaternion in [w, x, y, z] internally.
         """
         self.quaternion = self.mahony.updateIMU(
-            self.quaternion, gyr=gyro_data, acc=acc_data
+            q=self.quaternion, gyr=gyro_data, acc=acc_data
         )
-        self.normalize_quaternion()
         return self.quaternion

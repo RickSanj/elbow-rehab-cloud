@@ -14,4 +14,9 @@ venv
 __pycache__
 .git
 .gitignore
+.git/
 .data
+.venv/
+venv/
+env/
+*.pyc

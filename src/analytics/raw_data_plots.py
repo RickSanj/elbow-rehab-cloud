@@ -135,3 +135,25 @@ def plot_angles(df):
     plt.tight_layout()
     plt.savefig(f"{get_file_path(df)}/angles.png")
     plt.close(fig)
+
+
+def plot_orientation(df):
+    fig, axes = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
+    orientation_cols = [
+        ("roll_deg", "Roll", "#1f77b4"),
+        ("pitch_deg", "Pitch", "#ff7f0e"),
+        ("yaw_deg", "Yaw", "#2ca02c"),
+    ]
+
+    for ax, (col, label, color) in zip(axes, orientation_cols):
+        ax.plot(df.index, df[col], label=label, color=color)
+        ax.set_title(label)
+        ax.set_ylabel("deg")
+        ax.legend()
+
+    axes[-1].set_xlabel("Time")
+
+    fig.suptitle("Orientation Over Time", fontsize=16)
+    plt.tight_layout()
+    plt.savefig(f"{get_file_path(df)}/orientation.png")
+    plt.close(fig)

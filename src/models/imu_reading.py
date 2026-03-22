@@ -1,5 +1,5 @@
-from pydantic import BaseModel, model_validator
-from datetime import datetime
+from pydantic import BaseModel, Field, model_validator
+from datetime import datetime, timezone
 
 class ZeroPose(BaseModel):
     user_id: str | None = None
@@ -11,9 +11,11 @@ class ImuReading(BaseModel):
     user_id: str | None = None
     session_id: str | None = None
     session_time_iso: str
-    ingestion_timestamp_iso: str
+    ingestion_timestamp_iso: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
-    esp32_ms_A: int
+    esp32_ms_A: int # TODO remove esp32_ms_A and esp32_ms_B from the model and calculate session_time_iso based on the first reading's timestamp and the esp32_ms values
     esp32_ms_B: int
     ax_A: float
     ay_A: float
@@ -28,14 +30,6 @@ class ImuReading(BaseModel):
     gy_B: float
     gz_B: float
 
-    @model_validator(mode="before")
-    @classmethod
-    def build_session_id(cls, values: dict) -> dict:
-        user_id = values.get("user_id")
-        session_time = values.get("session_time_iso")
-        if user_id and session_time:
-            values["session_id"] = f"{user_id}_{session_time}"
-        return values
 
 class Pain(BaseModel):
     user_id: str | None = None

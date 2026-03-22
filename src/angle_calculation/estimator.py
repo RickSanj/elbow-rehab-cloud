@@ -1,24 +1,34 @@
-# calculate_angles.py
-# Simple calculation
 from __future__ import annotations
+from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-# from torch import atan2
 
 
 class SimpleElbowEstimator:
     def __init__(self, sample_rate_hz: float = 100.0):
         pass
 
+    def set_debug_log_path(
+        self,
+        log_path: str | Path | None,
+        *,
+        sample_indices: set[int] | list[int] | tuple[int, ...] | None = None,
+    ) -> None:
+        """Simple estimator does not emit orientation-solver debug logs."""
+        return None
+
     def rpy_to_matrix(self, roll, pitch, yaw):
         """Convert roll, pitch, yaw to a 3×3 rotation matrix."""
         return R.from_euler("xyz", [roll, pitch, yaw], degrees=True).as_matrix()
 
     def normalize_fe(self, angle_deg: float) -> float:
-        return (angle_deg + 180) % 360 - 180
+        angle_deg = angle_deg % 360.0
+        if angle_deg > 180.0:
+            angle_deg = 360.0 - angle_deg
+        return max(0.0, min(150.0, angle_deg))
 
     def normalize_ps(self, angle_deg: float) -> float:
-        return (angle_deg + 180) % 360 - 180
+        return (angle_deg + 90.0) % 180.0 - 90.0
 
     def median_smooth(self, series, window=10):
         smoothed = []
@@ -126,29 +136,75 @@ class SimpleElbowEstimator:
 
 
 # ----------------------- Rotation utilities -----------------------
-import numpy as np
 
 
 def skew(v: np.ndarray) -> np.ndarray:
+    """Return the skew-symmetric matrix associated with a 3D vector.
+
+    For a vector ``v = [x, y, z]``, this function constructs the matrix
+    ``[v]_x`` such that ``[v]_x @ w == np.cross(v, w)`` for any other 3D vector
+    ``w``.
+
+    Parameters
+    ----------
+    v : np.ndarray
+        Three-element vector to convert into its cross-product matrix.
+
+    Returns
+    -------
+    np.ndarray
+        3x3 skew-symmetric matrix representing the linear map
+        ``w -> v x w``.
+    """
     x, y, z = v
     return np.array([[0, -z, y], [z, 0, -x], [-y, x, 0]])
 
 
 def vee(M: np.ndarray) -> np.ndarray:
-    """Return the vector whose cross-product matrix equals ``M``'s skew part."""
+    """Map a skew-symmetric matrix back to its underlying 3D vector.
+
+    This is the inverse of :func:`skew` on the space of 3x3 skew-symmetric
+    matrices. If ``M = skew(v)``, then ``vee(M) == v``.
+
+    Parameters
+    ----------
+    M : np.ndarray
+        3x3 matrix whose skew-symmetric component should be converted to a
+        vector.
+
+    Returns
+    -------
+    np.ndarray
+        Three-element vector corresponding to ``M``'s skew part.
+    """
     return 0.5 * np.array(
         [M[2, 1] - M[1, 2], M[0, 2] - M[2, 0], M[1, 0] - M[0, 1]]
     )
 
 
 def exp_so3(v: np.ndarray) -> np.ndarray:
-    """Exponential map SO(3): rotation matrix from rotation vector v."""
-    theta = np.linalg.norm(v)
-    if theta < 1e-12:
-        return np.eye(3) + skew(v)
-    k = v / theta
-    K = skew(k)
-    return np.eye(3) + np.sin(theta) * K + (1 - np.cos(theta)) * (K @ K)
+    """Map a rotation vector in ``so(3)`` to a rotation matrix in ``SO(3)``.
+
+    The input ``v`` encodes an axis-angle rotation in vector form: its
+    direction is the rotation axis and its norm is the rotation angle in
+    radians. The function evaluates the matrix exponential via Rodrigues'
+    formula. For very small angles it falls back to the first-order
+    approximation ``I + skew(v)`` to avoid numerical issues near zero.
+
+    Parameters
+    ----------
+    v : np.ndarray
+        Three-element rotation vector in the Lie algebra ``so(3)``.
+
+    Returns
+    -------
+    np.ndarray
+        3x3 proper rotation matrix corresponding to the rotation encoded by
+        ``v``.
+    """
+    rot = R.from_rotvec(v)
+    rotation_matrix = rot.as_matrix()
+    return rotation_matrix
 
 
 def log_so3(R: np.ndarray) -> np.ndarray:
@@ -170,15 +226,22 @@ def log_so3(R: np.ndarray) -> np.ndarray:
     np.ndarray
         Axis-angle vector ``w`` whose norm equals the rotation angle in radians.
     """
-    cos_theta = (np.trace(R) - 1.0) * 0.5
-    cos_theta = np.clip(cos_theta, -1.0, 1.0)
+    tr = np.trace(R)
+    # Clamp for numerical stability to avoid NaNs in arccos
+    cos_theta = np.clip((tr - 1) / 2.0, -1.0, 1.0)
     theta = np.arccos(cos_theta)
+
     if theta < 1e-12:
-        return np.array([0.0, 0.0, 0.0])
-    w = (1 / (2 * np.sin(theta))) * np.array(
-        [R[2, 1] - R[1, 2], R[0, 2] - R[2, 0], R[1, 0] - R[0, 1]]
-    )
-    return theta * w
+        c = 0.5 * (1 + theta**2 / 6)
+    else:
+        c = theta / (2 * np.sin(theta))
+
+    w = c * np.array([
+        R[2, 1] - R[1, 2],
+        R[0, 2] - R[2, 0],
+        R[1, 0] - R[0, 1]
+    ])
+    return w
 
 
 def normalize(v: np.ndarray) -> np.ndarray:
@@ -232,14 +295,18 @@ def avoid_spherical_singularity(theta):
     """
     Avoid spherical singularity (θ near 0 or π) by temporarily reparameterizing the axis
     with a 90° frame rotation.
-    sin(2')≈0.0349, so this should not affect results much.
+    Firstly, wrap into the standard [0, 2*pi] circle
+    Secondly, If it crossed the pole into the other hemisphere
+    force it back into [0, pi])
+    Lastly, clamp slightly away from the exact poles
     """
-    eps = np.deg2rad(2.0)
-    if theta < eps:
-        theta = eps
-    if theta > np.pi - eps:
-        theta = np.pi - eps
-    return theta
+    eps = 1e-5
+    theta = theta % (2 * np.pi)
+
+    if theta > np.pi:
+        theta = 2 * np.pi - theta
+
+    return float(np.clip(theta, eps, np.pi - eps))
 
 # ----------------------- Estimator class -----------------------
 
@@ -248,7 +315,7 @@ class AlignmentFreeElbowEstimator:
     """
     Real-time, alignment-free estimator of FE (alpha) and PS (beta).
     Follows Müller et al. 2016:
-      - ω_r^A = -ω_A^A + R_BA ω_B^B
+      - ω_r^A = -ω_A^A + R_AB ω_B^B
       - Find a_A (in A) and b_B (in B) minimizing off-plane motion cost
       - Angles from generalized decomposition (here solved numerically)
     """
@@ -281,6 +348,11 @@ class AlignmentFreeElbowEstimator:
         self.has_zero = False
         self.alpha_prev = None
         self.beta_prev = None
+        self.debug_log_path: Path | None = None
+        self.debug_sample_index = 0
+        self.debug_sample_indices: set[int] | None = None
+        self.last_orientation_solve_debug: dict[str, object] = {}
+        self.use_gauss_newton_refinement = False
 
     def unwrap(self, angle, prev_angle):
         if prev_angle is None:
@@ -289,6 +361,159 @@ class AlignmentFreeElbowEstimator:
         # Wrap delta to (-π, π]
         delta = (delta + np.pi) % (2 * np.pi) - np.pi
         return prev_angle + delta
+
+    def set_debug_log_path(
+        self,
+        log_path: str | Path | None,
+        *,
+        sample_indices: set[int] | list[int] | tuple[int, ...] | None = None,
+    ) -> None:
+        """Configure the session-scoped text file used for angle debug logs."""
+        if log_path is None:
+            self.debug_log_path = None
+            self.debug_sample_index = 0
+            self.debug_sample_indices = None
+            self.last_orientation_solve_debug = {}
+            return
+
+        path = Path(log_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("AlignmentFreeElbowEstimator debug log\n\n", encoding="utf-8")
+        self.debug_log_path = path
+        self.debug_sample_index = 0
+        self.debug_sample_indices = (
+            {int(idx) for idx in sample_indices} if sample_indices is not None else None
+        )
+        self.last_orientation_solve_debug = {}
+
+    def append_debug_log(self, *lines: str) -> None:
+        """Append plain-text debug lines when file logging is enabled."""
+        if self.debug_log_path is None:
+            return
+
+        with self.debug_log_path.open("a", encoding="utf-8") as handle:
+            for line in lines:
+                handle.write(f"{line}\n")
+
+    def should_log_debug_sample(self, sample_index: int) -> bool:
+        """Return whether ``sample_index`` should be written to the debug log."""
+        return (
+            self.debug_sample_indices is None
+            or sample_index in self.debug_sample_indices
+        )
+
+    @staticmethod
+    def format_debug_value(value: object) -> str:
+        """Format vectors and matrices compactly for the text debug log."""
+        if isinstance(value, np.ndarray):
+            return np.array2string(value, precision=6, separator=", ")
+        if isinstance(value, (list, tuple)):
+            return np.array2string(np.asarray(value, dtype=float), precision=6, separator=", ")
+        return str(value)
+
+    def log_orientation_solution(self, alpha: float, beta: float) -> None:
+        """Record the raw orientation-solver output for one sample."""
+        if self.debug_log_path is None:
+            return
+
+        self.debug_sample_index += 1
+        if not self.should_log_debug_sample(self.debug_sample_index):
+            return
+
+        gauss_newton_steps = self.last_orientation_solve_debug.get(
+            "gauss_newton_steps", []
+        )
+        final_iteration_residuals = self.last_orientation_solve_debug.get(
+            "final_iteration_residuals", []
+        )
+        step_lines: list[str] = []
+        for step_info in gauss_newton_steps:
+            iteration = step_info["iteration"]
+            trial_residuals = step_info.get("trial_residuals", {})
+            trial_residuals_str = ", ".join(
+                f"{name}={value:.6f}" for name, value in trial_residuals.items()
+            )
+            step_lines.extend(
+                [
+                    f"r_err_before (iter {iteration}): {self.format_debug_value(step_info['r_err_before'])}",
+                    f"r_err_before_norm (iter {iteration}): {step_info['r_err_before_norm']}",
+                    f"J (iter {iteration}): {self.format_debug_value(step_info['J'])}",
+                    f"d_unclipped (iter {iteration}): {self.format_debug_value(step_info['d_unclipped'])}",
+                    f"d_clipped (iter {iteration}): {self.format_debug_value(step_info['d_clipped'])}",
+                    f"r_err_after (iter {iteration}): {self.format_debug_value(step_info['r_err_after'])}",
+                    f"r_err_after_norm (iter {iteration}): {step_info['r_err_after_norm']}",
+                    f"one-step trial residuals (iter {iteration}): {trial_residuals_str}",
+                ]
+            )
+        final_residual_lines = [
+            (
+                f"final residual after {step_info['iteration']} iteration"
+                f"{'' if step_info['iteration'] == 1 else 's'}: {step_info['r_err_norm_after']}"
+            )
+            for step_info in final_iteration_residuals
+        ]
+        self.append_debug_log(
+            f"sample: {self.debug_sample_index}",
+            f"selected_for_detailed_logging: True",
+            f"alpha raw (rad): {alpha}",
+            f"beta raw  (rad): {beta}",
+            f"alpha deg: {np.rad2deg(alpha)}",
+            f"Gauss-Newton refinement enabled: {self.last_orientation_solve_debug.get('gauss_newton_refinement_enabled')}",
+            f"R_AB: {self.format_debug_value(self.last_orientation_solve_debug.get('R_AB'))}",
+            f"a_A: {self.format_debug_value(self.last_orientation_solve_debug.get('a_A'))}",
+            f"b_B: {self.format_debug_value(self.last_orientation_solve_debug.get('b_B'))}",
+            f"b_A: {self.format_debug_value(self.last_orientation_solve_debug.get('b_A'))}",
+            f"||r_err||: {self.last_orientation_solve_debug.get('r_err_norm')}",
+            f"alpha0 from initial_angle_guess (rad): {self.last_orientation_solve_debug.get('initial_alpha')}",
+            f"beta0 from initial_angle_guess (rad): {self.last_orientation_solve_debug.get('initial_beta')}",
+            f"residual norm at initial guess: {self.last_orientation_solve_debug.get('initial_residual_norm')}",
+            f"residual at initial guess: {self.format_debug_value(self.last_orientation_solve_debug.get('initial_residual'))}",
+            *step_lines,
+            *final_residual_lines,
+            "",
+        )
+
+    def orientation_residual(
+        self,
+        R_AB: np.ndarray,
+        a_A: np.ndarray,
+        b_A: np.ndarray,
+        alpha: float,
+        beta: float,
+    ) -> tuple[np.ndarray, float]:
+        """Return the SO(3) residual vector and its norm for ``(alpha, beta)``."""
+        R_est = exp_so3(alpha * a_A) @ exp_so3(beta * b_A)
+        r_err = log_so3(R_est.T @ R_AB)
+        return r_err, float(np.linalg.norm(r_err))
+
+    def trial_residuals_for_step(
+        self,
+        R_AB: np.ndarray,
+        a_A: np.ndarray,
+        b_A: np.ndarray,
+        alpha: float,
+        beta: float,
+        d_unclipped: np.ndarray,
+        d_clipped: np.ndarray,
+    ) -> dict[str, float]:
+        """Compare one-step residual norms for several update sign conventions."""
+        conventions = {
+            "plus_unclipped": d_unclipped,
+            "minus_unclipped": -d_unclipped,
+            "plus_clipped": d_clipped,
+            "minus_clipped": -d_clipped,
+        }
+        trial_residuals: dict[str, float] = {}
+        for name, step in conventions.items():
+            _, residual_norm = self.orientation_residual(
+                R_AB,
+                a_A,
+                b_A,
+                alpha + float(step[0]),
+                beta + float(step[1]),
+            )
+            trial_residuals[name] = residual_norm
+        return trial_residuals
 
 
     def current_axes(self) -> tuple[np.ndarray, np.ndarray]:
@@ -316,19 +541,19 @@ class AlignmentFreeElbowEstimator:
         Returns
         -------
         tuple[np.ndarray, np.ndarray]
-            ``R_BA`` (rotation of the forearm expressed in the upper-arm frame) and
+            ``R_AB`` (rotation of the forearm expressed in the upper-arm frame) and
             ``omega_r_A`` (relative angular velocity of the forearm expressed in the
             upper-arm frame), where
-            ``omega_r_A = -omega_A^A + R_BA * omega_B^B``.
+            ``omega_r_A = -omega_A^A + R_AB * omega_B^B``.
         """
-        R_BA = R_A.T @ R_B
-        omega_r_A = -gyro_A + R_BA @ gyro_B
-        return R_BA, omega_r_A
+        R_AB = R_A.T @ R_B
+        omega_r_A = -gyro_A + R_AB @ gyro_B
+        return R_AB, omega_r_A
 
 
     def solve_alpha_beta(
         self,
-        R_BA: np.ndarray,
+        R_AB: np.ndarray,
         omega_r_A: np.ndarray,
         a_A: np.ndarray,
         b_B: np.ndarray
@@ -337,7 +562,7 @@ class AlignmentFreeElbowEstimator:
 
         Parameters
         ----------
-        R_BA : np.ndarray
+        R_AB : np.ndarray
             Rotation mapping vectors from the forearm frame ``B`` into the upper-arm frame ``A``.
         omega_r_A : np.ndarray
             Relative angular velocity of the forearm expressed in frame ``A`` (rad/s).
@@ -351,7 +576,7 @@ class AlignmentFreeElbowEstimator:
         tuple[float, float]
             Least-squares scalars ``alpha`` and ``beta``.
         """
-        b_A = R_BA @ b_B
+        b_A = R_AB @ b_B
         M = np.column_stack([a_A, b_A])
 
         MTM = M.T @ M
@@ -364,7 +589,7 @@ class AlignmentFreeElbowEstimator:
 
     def normalized_velocity_error(
         self,
-        R_BA: np.ndarray,
+        R_AB: np.ndarray,
         omega_r_A: np.ndarray,
         a_A: np.ndarray,
         b_B: np.ndarray,
@@ -376,10 +601,11 @@ class AlignmentFreeElbowEstimator:
         Returns zero when ``omega_r_A`` is below ``self.min_omega_r`` to avoid
         division by small numbers.
         """
-        if np.dot(omega_r_A, omega_r_A) < self.min_omega_r:
+        omega_mag_sq = float(np.dot(omega_r_A, omega_r_A))
+        if omega_mag_sq < (self.min_omega_r ** 2):
             return np.zeros(3)
-        e = alpha * a_A + beta * R_BA @ b_B - omega_r_A
-        return e / max(np.linalg.norm(omega_r_A), 1e-9)
+        e = alpha * a_A + beta * (R_AB @ b_B) - omega_r_A
+        return e / np.sqrt(omega_mag_sq)
 
 
     def update_cost(self, e_n: np.ndarray) -> float:
@@ -406,7 +632,7 @@ class AlignmentFreeElbowEstimator:
 
 
     def axis_projection_terms(
-        self, R_BA: np.ndarray, e_n: np.ndarray, alpha: float, beta: float
+        self, R_AB: np.ndarray, e_n: np.ndarray, alpha: float, beta: float
     ) -> tuple[float, float, float, float]:
         """Compute instantaneous projection terms used in the gradient update.
 
@@ -420,14 +646,14 @@ class AlignmentFreeElbowEstimator:
 
         term_a_theta = alpha * (e_n @ da_dtheta)
         term_a_rho = alpha * (e_n @ da_drho)
-        term_b_theta = beta * (e_n @ (R_BA @ db_dtheta))
-        term_b_rho = beta * (e_n @ (R_BA @ db_drho))
+        term_b_theta = beta * (e_n @ (R_AB @ db_dtheta))
+        term_b_rho = beta * (e_n @ (R_AB @ db_drho))
         return term_a_theta, term_a_rho, term_b_theta, term_b_rho
 
 
     def gradient_direction(
         self,
-        R_BA: np.ndarray,
+        R_AB: np.ndarray,
         e_n: np.ndarray,
         alpha: float,
         beta: float,
@@ -444,7 +670,7 @@ class AlignmentFreeElbowEstimator:
             term_a_rho,
             term_b_theta,
             term_b_rho,
-        ) = self.axis_projection_terms(R_BA, e_n, alpha, beta)
+        ) = self.axis_projection_terms(R_AB, e_n, alpha, beta)
 
         g = np.array(
             [
@@ -475,7 +701,7 @@ class AlignmentFreeElbowEstimator:
             setattr(self, name, val)
 
 
-    def gradient_step(self, R_BA: np.ndarray, omega_r_A: np.ndarray):
+    def gradient_step(self, R_AB: np.ndarray, omega_r_A: np.ndarray):
         """Run one gradient-descent iteration on the anatomical axes.
 
         The method solves for the instantaneous angular rates ``alpha`` and
@@ -485,7 +711,7 @@ class AlignmentFreeElbowEstimator:
 
         Parameters
         ----------
-        R_BA : np.ndarray
+        R_AB : np.ndarray
             3x3 rotation matrix mapping vectors from the forearm frame ``B`` into
             the upper-arm frame ``A``.
         omega_r_A : np.ndarray
@@ -500,18 +726,18 @@ class AlignmentFreeElbowEstimator:
             step size and convergence flag.
         """
         a_A, b_B = self.current_axes()
-        alpha, beta = self.solve_alpha_beta(R_BA, omega_r_A, a_A, b_B)
-        e_n = self.normalized_velocity_error(R_BA, omega_r_A, a_A, b_B, alpha, beta)
+        alpha, beta = self.solve_alpha_beta(R_AB, omega_r_A, a_A, b_B)
+        e_n = self.normalized_velocity_error(R_AB, omega_r_A, a_A, b_B, alpha, beta)
 
         # Cost update and step size
         J = self.update_cost(e_n)
         step = self.update_step_size(J)
 
         # thresholds: if little motion around axis, freeze its update
-        up_a = abs(alpha) > self.min_axis_speed
-        up_b = abs(beta) > self.min_axis_speed
+        up_a = abs(alpha) >= self.min_axis_speed
+        up_b = abs(beta) >= self.min_axis_speed
 
-        g = self.gradient_direction(R_BA, e_n, alpha, beta, up_a, up_b)
+        g = self.gradient_direction(R_AB, e_n, alpha, beta, up_a, up_b)
 
         self.apply_axis_update(step, g)
 
@@ -520,18 +746,18 @@ class AlignmentFreeElbowEstimator:
     # --------------- Angle extraction (generalized Euler via small solve) ---------------
 
     def initial_angle_guess(
-        self, R_BA: np.ndarray, a_A: np.ndarray, b_A: np.ndarray
+        self, R_AB: np.ndarray, a_A: np.ndarray, b_A: np.ndarray
     ) -> tuple[float, float]:
         """Project the rotation log onto the current axes to seed Gauss-Newton.
 
         Parameters
         ----------
-        R_BA : np.ndarray
+        R_AB : np.ndarray
             Orientation of the forearm frame expressed in the upper-arm frame.
         a_A : np.ndarray
             Flexion/extension axis expressed in frame ``A``.
         b_A : np.ndarray
-            Pronation/supination axis expressed in frame ``A`` (``R_BA @ b_B``).
+            Pronation/supination axis expressed in frame ``A`` (``R_AB @ b_B``).
 
         Returns
         -------
@@ -539,19 +765,19 @@ class AlignmentFreeElbowEstimator:
             Least-squares solution ``(alpha, beta)`` that best approximates the
             rotation vector along the provided axes.
         """
-        rvec = log_so3(R_BA)
+        rvec = log_so3(R_AB)
         A = np.column_stack([a_A, b_A])  # 3x2
         x0, *_ = np.linalg.lstsq(A, rvec, rcond=None)
         return float(x0[0]), float(x0[1])
 
-    def solve_angles_from_orientation(self, R_BA: np.ndarray) -> tuple[float, float]:
+    def solve_angles_from_orientation(self, R_AB: np.ndarray) -> tuple[float, float]:
         """
         Estimate flexion/extension (α) and pronation/supination (β) angles
-        from the relative orientation matrix R_BA.
+        from the relative orientation matrix R_AB.
 
         Parameters
         ----------
-        R_BA : np.ndarray, shape (3, 3)
+        R_AB : np.ndarray, shape (3, 3)
             Relative rotation matrix expressing frame B (forearm IMU)
             with respect to frame A (upper arm IMU).
 
@@ -566,12 +792,12 @@ class AlignmentFreeElbowEstimator:
         -----
         The relative orientation is modeled as a sequential rotation:
 
-            R_BA ≈ exp(α [a_A]^ ) · exp(β [b_A]^ )
+            R_AB ≈ exp(α [a_A]^ ) · exp(β [b_A]^ )
 
         where:
             a_A : FE axis expressed in frame A
             b_A : PS axis expressed in frame A
-                (computed from b_B via b_A = R_BA · b_B)
+                (computed from b_B via b_A = R_AB · b_B)
 
         Because this equation is nonlinear in α and β, the angles
         are solved using a small Gauss–Newton refinement (2–3 iterations)
@@ -585,24 +811,36 @@ class AlignmentFreeElbowEstimator:
 
         """
         a_A, b_B = self.current_axes()
-        b_A = normalize(R_BA @ b_B)
+        b_A = normalize(R_AB @ b_B)
 
-        alpha, beta = self.initial_angle_guess(R_BA, a_A, b_A)
+        alpha, beta = self.initial_angle_guess(R_AB, a_A, b_A)
+        initial_alpha = alpha
+        initial_beta = beta
+        alpha_work = alpha
+        beta_work = beta
+        prev_alpha = alpha_work
+        prev_beta = beta_work
+        r_err_initial, r_err_norm = self.orientation_residual(
+            R_AB, a_A, b_A, alpha, beta
+        )
+        gauss_newton_steps: list[dict[str, object]] = []
+        final_iteration_residuals: list[dict[str, object]] = []
+        refinement_aborted_on_large_residual = False
 
         # Gauss–Newton refinement
-        for _ in range(3): 
-            # Current estimated rotation: R_est = R_a(α) R_b(β)
-            R_est = exp_so3(alpha * a_A) @ exp_so3(beta * b_A)
-            # orientation error as a 3D rotation vector
-            r_err = log_so3(R_est.T @ R_BA)  # should be ~ 0
+        for iteration in range(3):
+            r_err, r_err_norm = self.orientation_residual(
+                R_AB, a_A, b_A, alpha_work, beta_work
+            )
 
-            if np.linalg.norm(r_err) < 1e-4:
+            if r_err_norm < 1e-4:
                 break
 
             # Sensitivity of R_est w.r.t α (rotation about a_A)
+            R_est = exp_so3(alpha_work * a_A) @ exp_so3(beta_work * b_A)
             J_alpha = -(skew(a_A) @ R_est)
             # Sensitivity of R_est w.r.t β (rotation about b_A)
-            J_beta = -(exp_so3(alpha * a_A) @ skew(b_A) @ exp_so3(beta * b_A))
+            J_beta = -(exp_so3(alpha_work * a_A) @ skew(b_A) @ exp_so3(beta_work * b_A))
 
             # Convert 3x3 skew-like matrices to 3D vectors
             v_alpha = vee(J_alpha)
@@ -611,12 +849,87 @@ class AlignmentFreeElbowEstimator:
 
             # Gauss–Newton update. Solve least-squares problem:
             JTJ = J.T @ J + 1e-6 * np.eye(2)
-            d = np.linalg.solve(JTJ, J.T @ r_err)
+            d_unclipped = np.linalg.solve(JTJ, J.T @ r_err)
+            max_step = 0.2  # rad (~11°)
+            d = np.clip(d_unclipped, -max_step, max_step)
+            trial_residuals = self.trial_residuals_for_step(
+                R_AB,
+                a_A,
+                b_A,
+                alpha_work,
+                beta_work,
+                d_unclipped,
+                d,
+            )
+            alpha_after = alpha_work + float(d[0])
+            beta_after = beta_work + float(d[1])
+            r_err_after, r_err_after_norm = self.orientation_residual(
+                R_AB, a_A, b_A, alpha_after, beta_after
+            )
+            gauss_newton_steps.append(
+                {
+                    "iteration": iteration + 1,
+                    "r_err_before": r_err.copy(),
+                    "r_err_before_norm": r_err_norm,
+                    "J": J.copy(),
+                    "d_unclipped": [float(d_unclipped[0]), float(d_unclipped[1])],
+                    "d_clipped": [float(d[0]), float(d[1])],
+                    "r_err_after": r_err_after.copy(),
+                    "r_err_after_norm": r_err_after_norm,
+                    "trial_residuals": trial_residuals,
+                }
+            )
+            final_iteration_residuals.append(
+                {
+                    "iteration": iteration + 1,
+                    "r_err_after": r_err_after.copy(),
+                    "r_err_norm_after": r_err_after_norm,
+                }
+            )
+
+            if r_err_norm > 1.0:
+                refinement_aborted_on_large_residual = True
+                break
 
             # Update angles
-            alpha += d[0]
-            beta += d[1]
+            alpha_work = alpha_after
+            beta_work = beta_after
+            prev_alpha = alpha_work
+            prev_beta = beta_work
 
+        # Wrap [-p; p]
+        if self.use_gauss_newton_refinement:
+            if refinement_aborted_on_large_residual:
+                alpha = prev_alpha
+                beta = prev_beta
+            else:
+                alpha = alpha_work
+                beta = beta_work
+            alpha = (alpha + np.pi) % (2 * np.pi) - np.pi
+            beta = (beta + np.pi) % (2 * np.pi) - np.pi
+        else:
+            alpha = initial_alpha
+            beta = initial_beta
+
+        final_residual, final_residual_norm = self.orientation_residual(
+            R_AB, a_A, b_A, alpha, beta
+        )
+
+        self.last_orientation_solve_debug = {
+            "gauss_newton_refinement_enabled": self.use_gauss_newton_refinement,
+            "R_AB": R_AB.copy(),
+            "a_A": a_A.copy(),
+            "b_B": b_B.copy(),
+            "b_A": b_A.copy(),
+            "r_err_norm": final_residual_norm,
+            "initial_alpha": float(initial_alpha),
+            "initial_beta": float(initial_beta),
+            "initial_residual": r_err_initial.copy(),
+            "initial_residual_norm": float(np.linalg.norm(r_err_initial)),
+            "final_residual": final_residual.copy(),
+            "gauss_newton_steps": gauss_newton_steps,
+            "final_iteration_residuals": final_iteration_residuals,
+        }
         return alpha, beta
 
     def update_angles(
@@ -646,13 +959,14 @@ class AlignmentFreeElbowEstimator:
             current zero-pose offset is applied.
         """
         # Relative quantities
-        R_BA, omega_r_A = self.relative(R_A, R_B, gyro_A, gyro_B)
+        R_AB, omega_r_A = self.relative(R_A, R_B, gyro_A, gyro_B)
 
         # Single-sample gradient step on axes
-        self.gradient_step(R_BA, omega_r_A)
+        self.gradient_step(R_AB, omega_r_A)
 
         # Angles from orientation with current axes
-        alpha, beta = self.solve_angles_from_orientation(R_BA)
+        alpha, beta = self.solve_angles_from_orientation(R_AB)
+        self.log_orientation_solution(alpha, beta)
 
         # Zero-pose offset
         if self.has_zero:
@@ -660,8 +974,8 @@ class AlignmentFreeElbowEstimator:
             beta -= self.beta0
 
         # Unwrap angles to avoid jumps
-        alpha = self.unwrap(alpha, self.alpha_prev)
-        beta = self.unwrap(beta, self.beta_prev)
+        # alpha = self.unwrap(alpha, self.alpha_prev)
+        # beta = self.unwrap(beta, self.beta_prev)
         self.alpha_prev = alpha
         self.beta_prev = beta
 
@@ -669,8 +983,8 @@ class AlignmentFreeElbowEstimator:
 
     def set_zero_pose(self, R_A: np.ndarray, R_B: np.ndarray):
         """Call once when user is in your 'zero pose' to store offsets."""
-        R_BA = R_A.T @ R_B
-        alpha, beta = self.solve_angles_from_orientation(R_BA)
+        R_AB = R_A.T @ R_B
+        alpha, beta = self.solve_angles_from_orientation(R_AB)
         self.alpha0 = alpha
         self.beta0 = beta
         self.has_zero = True

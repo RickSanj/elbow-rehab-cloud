@@ -23,9 +23,10 @@ from src.service.configure_database import (
     sync_firebase_users_to_db,
     update_pain_level,
     record_zero_pose_event,
+    ensure_patient_exists,
 )
 from src.utils.logger import get_logger
-from src.angle_calculation.calculations import ElbowTracker
+from src.angle_calculation.calculations import ElbowTracker, get_sample_rate
 from contextlib import asynccontextmanager
 
 logger = get_logger()
@@ -70,6 +71,8 @@ def get_session_report(pain_data: Pain):
         raise HTTPException(status_code=404, detail="Session not found")
 
     report_data = compute_session_report(session_data, pain_data.pain_level)
+    print(report_data)
+    logger.info(f"Report generated for session_ID: {pain_data.session_id}, report: {report_data}")
     load_report(report_data)
     return report_data
 
@@ -82,9 +85,10 @@ def calculate_angles(session_id: str):
     if session_data.empty:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    elbow_tracker = ElbowTracker()
+    elbow_tracker = ElbowTracker(sample_rate=get_sample_rate(session_data))
     processed_df = elbow_tracker.process_session_angles(session_data)
     angles_df = load_calculated_angles(processed_df)
+
     return angles_df
 
 @app.post("/imu/pain", status_code=HTTPStatus.CREATED)
@@ -118,6 +122,7 @@ def record_zero_pose_timestamp(
     zero_pose.user_id = user_id
     zero_pose.session_id = f"{user_id}_{zero_pose.session_time_iso}"
 
+    ensure_patient_exists(user_id)
     record_zero_pose_event(zero_pose)
 
     return {
@@ -138,7 +143,12 @@ async def ingest_imu_readings(
     rows_to_insert = []
     for reading in raw_readings:
         reading.user_id = user_id
-        reading.build_session_id(reading.__dict__) 
+        reading.session_id = f"{user_id}_{reading.session_time_iso}"
+        # Swap z axis
+        reading.az_A *= -1
+        reading.gz_A *= -1
+        reading.az_B *= -1
+        reading.gz_B *= -1
         rows_to_insert.append(reading.model_dump(mode="json"))
 
     logger.info(f"Inserting {len(rows_to_insert)} readings for user {user_id}")

@@ -13,6 +13,7 @@ echo "Building image..."
 
 docker buildx build \
   --platform linux/amd64 \
+  --no-cache \
   -f ./Dockerfile \
   -t europe-central2-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${SERVICE_NAME}:latest \
   --push .

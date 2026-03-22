@@ -22,5 +22,4 @@ class MadgwickFilter(BaseFilter):
         self.quaternion = self.madgwick.updateIMU(
             self.quaternion, gyr=gyro_data, acc=acc_data
         )
-        self.normalize_quaternion()
         return self.quaternion

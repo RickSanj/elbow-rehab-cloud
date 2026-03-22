@@ -37,7 +37,7 @@ def connect_with_connector() -> sqlalchemy.engine.Engine:
     """
     ip_type = IPTypes.PRIVATE if os.environ.get("PRIVATE_IP") else IPTypes.PUBLIC
 
-    connector = Connector(ip_type=ip_type)#, refresh_strategy="LAZY")
+    connector = Connector(ip_type=ip_type, refresh_strategy="LAZY")
 
     def getconn() -> pg8000.dbapi.Connection:
         conn = connector.connect(
@@ -59,7 +59,13 @@ def connect_with_connector() -> sqlalchemy.engine.Engine:
     )
     return engine_
 
-engine = connect_with_connector()
+_engine = None
+
+def get_engine():
+    global _engine
+    if _engine is None:
+        _engine = connect_with_connector()
+    return _engine
 
 def sync_firebase_users_to_db():
     pass
@@ -103,6 +109,7 @@ def sync_firebase_users_to_db():
 #         db.close()
 
 def ensure_patient_exists(user_id: str):
+    engine = get_engine()
     with engine.begin() as conn:
         try:
             conn.execute(
@@ -121,6 +128,7 @@ def load_report(report_data: Report):
     """Loads specific rehab metrics to Cloud SQL."""
     logger.debug(f"Loading report {report_data.session_id} to reports table")
 
+    engine = get_engine()
     with engine.connect() as conn:
         try:
             conn.execute(
@@ -141,6 +149,7 @@ def update_pain_level(pain_data: Pain):
        Raises error if the row does not exist.
     """
     logger.info(f"Updating pain_level for session_id={pain_data.session_id}")
+    engine = get_engine()
     with engine.begin() as conn:
         try:
             result = conn.execute(
@@ -170,6 +179,7 @@ def record_zero_pose_event(zero_pose: ZeroPose):
         zero_pose.zero_pose_timestamp_iso,
     )
 
+    engine = get_engine()
     with engine.begin() as conn:
         try:
             conn.execute(

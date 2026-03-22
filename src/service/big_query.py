@@ -1,5 +1,6 @@
 import pandas_gbq
-from pandas import DataFrame
+from pandas import DataFrame, to_datetime
+from src.angle_calculation.calculations import sort_session_samples
 from src.utils.logger import get_logger
 from src.service.configure_infrastructure import require_env
 
@@ -39,6 +40,14 @@ def get_imu_reading_df(session_id: str):
     """
 
     df = pandas_gbq.read_gbq(query, project_id=PROJECT_ID)
+
+    df["session_time_iso"] = to_datetime(df["session_time_iso"], utc=True)
+    if "ingestion_timestamp_iso" in df.columns:
+        df["ingestion_timestamp_iso"] = to_datetime(
+            df["ingestion_timestamp_iso"], utc=True, errors="coerce"
+        )
+    df = sort_session_samples(df)
+
     return df
 
 

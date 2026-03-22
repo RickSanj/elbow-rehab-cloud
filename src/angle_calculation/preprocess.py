@@ -14,7 +14,7 @@ def preprocess(acc_m_s2, gyr_rad_s):
     return acc, gyr
 
 
-def ema_filter(input_signal, alpha=0.30):
+def ema_filter(input_signal, alpha=1.0):
     signal = np.atleast_1d(np.asarray(input_signal, dtype=float))
 
     if signal.size == 0:
