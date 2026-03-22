@@ -3,7 +3,7 @@ import textwrap
 from unittest.mock import MagicMock
 
 import pytest
-from src.models.imu_reading import ZeroPose
+from src.models.data_models import ZeroPoseSchema
 
 REQUIRED_ENV_VARS = {
     "DB_USER": "test-user",
@@ -23,9 +23,9 @@ def configure_db(monkeypatch):
     for key, value in REQUIRED_ENV_VARS.items():
         monkeypatch.setenv(key, value)
 
-    import src.service.configure_database as configure_database
+    import src.infrastructure.cloud_sql.cloud_sql_client as cloud_sql_client
 
-    return importlib.reload(configure_database)
+    return importlib.reload(cloud_sql_client)
 
 
 def _build_engine_mock(connection_mock: MagicMock) -> MagicMock:
@@ -41,8 +41,8 @@ def _build_engine_mock(connection_mock: MagicMock) -> MagicMock:
     return engine_mock
 
 
-def _build_zero_pose() -> ZeroPose:
-    return ZeroPose(
+def _build_zero_pose() -> ZeroPoseSchema:
+    return ZeroPoseSchema(
         user_id="user-123",
         session_id="user-123_2026-03-10T10:00:00Z",
         session_time_iso="2026-03-10T10:00:00Z",

@@ -2,7 +2,7 @@ import pandas_gbq
 from pandas import DataFrame, to_datetime
 from src.angle_calculation.calculations import sort_session_samples
 from src.utils.logger import get_logger
-from src.service.configure_infrastructure import require_env
+from src.utils.helpers import require_env
 
 from logging import getLogger
 

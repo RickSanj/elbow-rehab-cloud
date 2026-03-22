@@ -1,24 +1,17 @@
 import os
-from black.report import Report
+from src.models.data_models import ReportSchema
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
 from google.cloud.sql.connector import Connector, IPTypes
 import pg8000
 
-from firebase_admin import auth, credentials, initialize_app
-from src.models.imu_reading import Pain, ZeroPose
+from src.models.data_models import PainSchema, ZeroPoseSchema
 from src.utils.logger import get_logger
-from src.service.configure_infrastructure import require_env
+from src.utils.helpers import require_env
 
 logger = get_logger()
 
-# 1. Initialize Firebase (Ensure this is called once)
-# If running on Google Cloud, it uses default credentials automatically
-# try:
-#     initialize_app()
-# except ValueError:
-#     pass
 
 db_user = require_env("DB_USER")
 db_pass = require_env("DB_PASS")
@@ -67,46 +60,6 @@ def get_engine():
         _engine = connect_with_connector()
     return _engine
 
-def sync_firebase_users_to_db():
-    pass
-#     # Create a new database session
-#     db = SessionLocal()
-
-#     try:
-#         # Fetch users from Firebase
-#         page = auth.list_users()
-#         while page:
-#             for user in page.users:
-#                 logger.info(f"Syncing User: {user.email}")
-#                 # Prepare the SQL Insert statement
-#                 # We use "ON CONFLICT" to avoid errors if the user already exists
-#                 query = text("""
-#                     INSERT INTO users (uid, email, role)
-#                     VALUES (:uid, :email, :role)
-#                     ON CONFLICT (uid) DO NOTHING
-#                 """)
-
-#                 # Execute the query using the session
-#                 # Note: 'role' is required by your schema; we'll default to 'patient'
-#                 db.execute(
-#                     query, {"uid": user.uid, "email": user.email, "role": "patient"}
-#                 )
-
-#                 logger.info(f"Synced User: {user.email}")
-
-#             page = page.get_next_page()
-
-#         # 3. Commit the transaction to save changes
-#         db.commit()
-#         logger.info("Synchronization complete.")
-
-#     except Exception as e:
-#         # Rollback if something goes wrong to keep data consistent
-#         db.rollback()
-#         logger.error(f"Error during sync: {e}")
-#     finally:
-#         # 4. Always close the session when finished
-#         db.close()
 
 def ensure_patient_exists(user_id: str):
     engine = get_engine()
@@ -124,7 +77,7 @@ def ensure_patient_exists(user_id: str):
             logger.exception("Pain level insert failed: {e}")
             raise
 
-def load_report(report_data: Report):
+def load_report(report_data: ReportSchema):
     """Loads specific rehab metrics to Cloud SQL."""
     logger.debug(f"Loading report {report_data.session_id} to reports table")
 
@@ -144,7 +97,7 @@ def load_report(report_data: Report):
     return
 
 
-def update_pain_level(pain_data: Pain):
+def update_pain_level(pain_data: PainSchema):
     """Updates pain_level for an existing report row by session_id.
        Raises error if the row does not exist.
     """
@@ -171,7 +124,7 @@ def update_pain_level(pain_data: Pain):
             raise
 
 
-def record_zero_pose_event(zero_pose: ZeroPose):
+def record_zero_pose_event(zero_pose: ZeroPoseSchema):
     """Persists (or updates) session metadata with zero-pose timestamp."""
     logger.info(
         "Recording zero-pose timestamp for session_id=%s at %s",

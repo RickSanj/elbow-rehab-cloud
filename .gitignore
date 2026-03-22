@@ -1,7 +1,7 @@
 .idea
 .env
 gha-creds-*.json
-credentials.json
+config/credentials.json
 target
 *.iml
 **/avro/generated

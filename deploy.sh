@@ -13,11 +13,11 @@ echo "Building image..."
 
 docker buildx build \
   --platform linux/amd64 \
-  --no-cache \
   -f ./Dockerfile \
   -t europe-central2-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${SERVICE_NAME}:latest \
   --push .
 
+  # --no-cache \
 echo "Deploying to Cloud Run..."
 
 gcloud run deploy ${SERVICE_NAME} \
@@ -36,6 +36,7 @@ INSTANCE_NAME=${INSTANCE_NAME}|\
 DB_USER=${DB_USER}|\
 DB_PASS=${DB_PASS}|\
 DB_NAME=${DB_NAME}|\
+FIREBASE_CRED=${FIREBASE_CRED}|\
 INSTANCE_UNIX_SOCKET=${INSTANCE_UNIX_SOCKET}"
 
 echo "Done."

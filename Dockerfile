@@ -7,10 +7,11 @@ ENV PORT=8080
 WORKDIR $APP_HOME
 
 COPY ./requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir "setuptools<70.0.0" && \
+    pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
 EXPOSE 8080
 
-CMD ["uvicorn", "src.service.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -1,13 +1,13 @@
 from pydantic import BaseModel, Field, model_validator
 from datetime import datetime, timezone
 
-class ZeroPose(BaseModel):
+class ZeroPoseSchema(BaseModel):
     user_id: str | None = None
     session_id: str | None = None
     session_time_iso: str
     zero_pose_timestamp_iso: str
 
-class ImuReading(BaseModel):
+class ImuReadingSchema(BaseModel):
     user_id: str | None = None
     session_id: str | None = None
     session_time_iso: str
@@ -31,7 +31,7 @@ class ImuReading(BaseModel):
     gz_B: float
 
 
-class Pain(BaseModel):
+class PainSchema(BaseModel):
     user_id: str | None = None
     session_id: str | None = None
     session_time_iso: str
@@ -39,7 +39,7 @@ class Pain(BaseModel):
     pain_level: float
 
 
-class Report(BaseModel):
+class ReportSchema(BaseModel):
     session_id: str
     duration: float
     max_flexion: float

@@ -1,11 +1,11 @@
-from src.models.imu_reading import Report
+from src.models.data_models import ReportSchema
 from pandas import DataFrame
 import numpy as np
 import pandas as pd
 from scipy.signal import medfilt
 
 from src.angle_calculation.calculations import prepare_final_angle_columns
-from src.service.big_query import get_imu_reading_df
+from src.infrastructure.bigquery.bigquery_operations import get_imu_reading_df
 from src.utils.logger import get_logger
 
 logger = get_logger()
@@ -18,7 +18,7 @@ def get_sesion_duration(session_id):
     return duration.total_seconds()
 
 
-def compute_session_report(df: DataFrame, pain_level: float | None) -> Report:
+def compute_session_report(df: DataFrame, pain_level: float | None) -> ReportSchema:
     df = prepare_final_angle_columns(df, preserve_raw=False)
     session_id = df.iloc[0]["session_id"]
     duration = get_sesion_duration(session_id)
@@ -28,7 +28,7 @@ def compute_session_report(df: DataFrame, pain_level: float | None) -> Report:
     max_supination = df["pronation_deg"].min()
     reps_count = get_reps_count(df)
 
-    return Report(
+    return ReportSchema(
         session_id=session_id,
         duration=duration,
         max_flexion=max_flexion,

@@ -1,7 +1,7 @@
 import pytest
-from src.models.imu_reading import Pain
-from src.service.big_query import get_imu_reading_df
-from src.service.main import calculate_angles, get_session_report
+from src.models.data_models import PainSchema
+from src.infrastructure.bigquery.bigquery_operations import get_imu_reading_df
+from src.api.sessions import calculate_angles, get_session_report
 
 
 def test_get_df_from_session_id():
@@ -17,7 +17,7 @@ def test_get_df_from_session_id():
     # session_id = "zWwE7FlIf2dix6c0SzmtphrSib23_2026-03-19T14:24:24.342Z" # last 
     session_id = "zWwE7FlIf2dix6c0SzmtphrSib23_2026-03-19T15:49:44.129Z"
 
-    pain_data = Pain(
+    pain_data = PainSchema(
         session_id="zWwE7FlIf2dix6c0SzmtphrSib23_2026-03-12T16:00:10Z",
         pain_level=3.5,
         session_time_iso=session_id.split("_")[1],

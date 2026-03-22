@@ -1,9 +1,9 @@
 """
-Test the ImuReading Pydantic model
+Test the ImuReadingSchema Pydantic model
 """
 
 from datetime import datetime, timezone
-from src.models.imu_reading import ImuReading
+from src.models.data_models import ImuReadingSchema
 
 
 def test_imu_reading_model():
@@ -27,7 +27,7 @@ def test_imu_reading_model():
         "gz_B": 0.0,
     }
 
-    imu_reading = ImuReading(
+    imu_reading = ImuReadingSchema(
         **raw_reading, user_id=user_id, session_time_iso=session_time_iso
     )
 
