@@ -997,9 +997,8 @@ class AlignmentFreeElbowEstimator:
     def set_zero_pose(self, R_A: np.ndarray, R_B: np.ndarray):
         """Call once when user is in your 'zero pose' to store offsets."""
         R_AB = R_A.T @ R_B
-        print("+++++++++++++++++++")
-        logger.info("+++++++++++++++++++")
         alpha, beta = self.solve_angles_from_orientation(R_AB)
+        logger.debug("Zero pose set: alpha0=%.4f rad, beta0=%.4f rad", alpha, beta)
         self.alpha0 = alpha
         self.beta0 = beta
         self.has_zero = True

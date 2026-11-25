@@ -25,6 +25,8 @@ NO_ZERO_POSE_SEARCH_S = 30.0  # fallback: first 30 s of the session
 NO_ZERO_POSE_WINDOW_S = 2.0
 GRAVITY_MS2 = 9.81
 ACC_REST_TOLERANCE = 0.2  # |mean acc| within 20 % of g during rest
+# A "rest" window noisier than this is motion, not rest: no bias is removed.
+REST_MAX_GYRO_STD = 0.05  # rad/s, mean per-axis std
 
 # Default AHRS filter for v2 processing (same as v1: "ekf").
 DEFAULT_FILTER = "ekf"

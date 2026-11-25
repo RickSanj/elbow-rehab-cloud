@@ -243,3 +243,17 @@ def test_grid_points_inside_a_gap_are_invalid():
     assert on_a.valid[~in_gap].all()
     assert on_b.valid.all()
     np.testing.assert_allclose(np.diff(grid), 0.01, atol=1e-9)
+
+
+def test_moving_sensor_gets_no_bias_instead_of_a_wrong_one():
+    always_moving = simulate_session(
+        30.0, lambda t: 65 + 35 * np.sin(2 * np.pi * 0.25 * np.asarray(t)), constant(0)
+    )
+    samples, _, _ = prepared(always_moving.packets, "B")
+
+    bias = estimate_bias(samples, zero_pose_t_s=None)
+
+    assert not bias.found
+    assert bias.reason == "no_rest_window"
+    assert bias.gyro_bias == (0.0, 0.0, 0.0)
+    assert bias.gyro_std > 0.05

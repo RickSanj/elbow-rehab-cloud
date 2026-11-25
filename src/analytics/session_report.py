@@ -4,14 +4,15 @@ import numpy as np
 from scipy.signal import medfilt
 
 from src.angle_calculation.calculations import prepare_final_angle_columns
-from src.infrastructure.bigquery.bigquery_operations import get_imu_reading_df
 from src.utils.logger import get_logger
 
 logger = get_logger()
 
 
 def get_sesion_duration(session_id):
-    """Return session duration (seconds) by fetching IMU readings for a session."""
+    """Return session duration (seconds) by fetching IMU readings for a session (v1)."""
+    from src.infrastructure.bigquery.bigquery_operations import get_imu_reading_df
+
     df = get_imu_reading_df(session_id)
     duration = df["ingestion_timestamp_iso"].max() - df["session_time_iso"].min()
     return duration.total_seconds()
@@ -75,11 +76,23 @@ def get_reps_count(df: DataFrame,
                    v_min=15,
                    v_stop=5,
                    t_min_rep=0.8,
-                   debounce_samples=3):
+                   debounce_samples=3,
+                   *,
+                   time_col="esp32_ms_A",
+                   time_scale=1e-3,
+                   angle_col="flexion_deg",
+                   return_details=False):
+    """Count flexion repetitions with a debounced state machine.
 
-    df = df.sort_values("esp32_ms_A").copy()
-    t = df["esp32_ms_A"].values.astype(float) / 1000.0  # convert ms to seconds
-    theta = df["flexion_deg"].values.astype(float)
+    ``time_col * time_scale`` must be seconds: v1 passes esp32_ms_A (ms),
+    v2 passes t_s with time_scale=1. With ``return_details`` the per-rep
+    start/end times are returned as well.
+    """
+    df = df.sort_values(time_col).copy()
+    t = df[time_col].values.astype(float) * time_scale
+    theta = df[angle_col].values.astype(float)
+    if len(theta) < 7:
+        return (0, []) if return_details else 0
 
     # -------------------------
     # 1️⃣ Preprocess angle
@@ -176,8 +189,6 @@ def get_reps_count(df: DataFrame,
                 up_start_time = None
                 down_start_time = None
 
-    # return {
-    #     "rep_count": reps,
-    #     "rep_details": rep_data
-    # }
+    if return_details:
+        return reps, rep_data
     return reps
