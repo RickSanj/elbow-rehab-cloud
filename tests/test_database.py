@@ -95,4 +95,5 @@ def test_record_zero_pose_event_logs_and_reraises(monkeypatch, configure_db):
 
     engine_mock.begin.assert_called_once()
     connection_mock.execute.assert_called_once()
-    logger_mock.exception.assert_called_once_with("Zero pose insert failed: {e}")
+    logger_mock.exception.assert_called_once()
+    assert "Zero pose insert failed" in logger_mock.exception.call_args[0][0]

@@ -4,14 +4,12 @@ from fastapi.exceptions import HTTPException
 
 from src.utils.logger import get_logger
 from src.models.auth_models import SignupSchema, LoginSchema, SignupResponse
-from src.infrastructure.firebase.firebase_client import get_firebase_app, get_pyrebase_auth
+from src.infrastructure.firebase.firebase_client import get_pyrebase_auth
 from src.infrastructure.cloud_sql.cloud_sql_client import create_doctor, get_patient_id_from_token, patient_exists, create_doctor_patient_link
 
 
 logger = get_logger()
 router = APIRouter()
-
-firebase = get_firebase_app()
 
 
 @router.post("/signup", status_code=HTTPStatus.CREATED)

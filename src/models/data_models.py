@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 
 class ZeroPoseSchema(BaseModel):

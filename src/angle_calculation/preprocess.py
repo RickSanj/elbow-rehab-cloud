@@ -27,16 +27,3 @@ def ema_filter(input_signal, alpha=1.0):
         out[i] = alpha * signal[i] + (1 - alpha) * out[i - 1]
     return out
 
-
-def low_pass_filer(acc_m_s2, gyr_rad_s):
-    LPF_ACC_ALPHA = 0.10
-    LPF_GYRO_ALPHA = 0.01
-
-    g_x_new = LPF_GYRO_ALPHA * gyr_rad_s[0] + (1 - LPF_GYRO_ALPHA) * gyr_rad_s[0]
-    g_y_new = LPF_GYRO_ALPHA * gyr_rad_s[1] + (1 - LPF_GYRO_ALPHA) * gyr_rad_s[1]
-    g_z_new = LPF_GYRO_ALPHA * gyr_rad_s[2] + (1 - LPF_GYRO_ALPHA) * gyr_rad_s[2]
-
-    a_x_new = LPF_ACC_ALPHA * acc_m_s2[0] + (1 - LPF_ACC_ALPHA) * acc_m_s2[0]
-    a_y_new = LPF_ACC_ALPHA * acc_m_s2[1] + (1 - LPF_ACC_ALPHA) * acc_m_s2[1]
-    a_z_new = LPF_ACC_ALPHA * acc_m_s2[2] + (1 - LPF_ACC_ALPHA) * acc_m_s2[2]
-    return

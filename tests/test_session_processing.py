@@ -66,6 +66,8 @@ def test_prepare_final_angle_columns_bounds_existing_regression_session():
         / "20260319_154944"
         / "angles_by_session.csv"
     )
+    if not csv_path.exists():
+        pytest.skip(f"regression fixture not present: {csv_path}")
     df = pd.read_csv(csv_path, usecols=["flexion_deg", "pronation_deg"])
 
     prepared = prepare_final_angle_columns(df)

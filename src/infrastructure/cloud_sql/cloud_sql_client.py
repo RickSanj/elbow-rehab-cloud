@@ -1,27 +1,13 @@
-import os
-from src.models.data_models import ReportSchema
-import sqlalchemy
-from sqlalchemy.orm import sessionmaker
-from datetime import datetime, timedelta
-from sqlalchemy import text
-from google.cloud.sql.connector import Connector, IPTypes
-import pg8000
+from datetime import datetime, timedelta, timezone
 
-from src.models.data_models import PainSchema, ZeroPoseSchema
+import sqlalchemy
+from sqlalchemy import text
+
+from src.config import get_settings
+from src.models.data_models import PainSchema, ReportSchema, ZeroPoseSchema
 from src.utils.logger import get_logger
-from src.utils.helpers import require_env
 
 logger = get_logger()
-
-
-db_user = require_env("DB_USER")
-db_pass = require_env("DB_PASS")
-db_name = require_env("DB_NAME")
-
-PROJECT_ID = require_env("PROJECT_ID")
-LOCATION = require_env("LOCATION")
-INSTANCE_NAME = require_env("INSTANCE_NAME")
-instance_connection_name = f"{PROJECT_ID}:{LOCATION}:{INSTANCE_NAME}"
 
 
 def connect_with_connector() -> sqlalchemy.engine.Engine:
@@ -30,17 +16,22 @@ def connect_with_connector() -> sqlalchemy.engine.Engine:
 
     Uses the Cloud SQL Python Connector package.
     """
-    ip_type = IPTypes.PRIVATE if os.environ.get("PRIVATE_IP") else IPTypes.PUBLIC
+    from google.cloud.sql.connector import Connector, IPTypes
+
+    settings = get_settings()
+    settings.require("db_user", "db_pass", "db_name", "project_id", "location", "instance_name")
+    instance_connection_name = f"{settings.project_id}:{settings.location}:{settings.instance_name}"
+    ip_type = IPTypes.PRIVATE if settings.private_ip else IPTypes.PUBLIC
 
     connector = Connector(ip_type=ip_type, refresh_strategy="LAZY")
 
-    def getconn() -> pg8000.dbapi.Connection:
+    def getconn():
         conn = connector.connect(
             instance_connection_name,
             "pg8000",
-            user=db_user,
-            password=db_pass,
-            db=db_name,
+            user=settings.db_user,
+            password=settings.db_pass.get_secret_value(),
+            db=settings.db_name,
         )
         return conn
 
@@ -237,7 +228,7 @@ def save_token(token: str, patient_id: str, ttl_hours: int = 24):
     """Save invite token with expiration."""
 
     engine = get_engine()
-    expires_at = datetime.utcnow() + timedelta(hours=ttl_hours)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=ttl_hours)
 
     with engine.begin() as conn:
         conn.execute(

@@ -70,8 +70,8 @@ def ingest_pain_data(
     pain_data.session_id = f"{user_id}_{pain_data.session_time_iso}"
     pain_data.user_id = user_id
 
-    report_data = get_session_report(pain_data)
-    return  {"message": f"Successfully added pain logs."}
+    get_session_report(pain_data)
+    return  {"message": "Successfully added pain logs."}
 
 
 @router.post("/imu/zero-pose", status_code=HTTPStatus.CREATED)

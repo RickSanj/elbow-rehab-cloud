@@ -197,7 +197,7 @@ def test_log_orientation_solution_writes_requested_fields(tmp_path):
     estimator.set_debug_log_path(log_path)
     estimator.last_orientation_solve_debug = {
         "gauss_newton_refinement_enabled": True,
-        "R_BA": np.eye(3),
+        "R_AB": np.eye(3),
         "a_A": np.array([1.0, 0.0, 0.0]),
         "b_B": np.array([0.0, 1.0, 0.0]),
         "b_A": np.array([0.0, 1.0, 0.0]),
@@ -253,7 +253,7 @@ def test_log_orientation_solution_writes_requested_fields(tmp_path):
     assert "beta raw  (rad): -0.25" in content
     assert "alpha deg:" in content
     assert "Gauss-Newton refinement enabled: True" in content
-    assert "R_BA:" in content
+    assert "R_AB:" in content
     assert "a_A:" in content
     assert "b_B:" in content
     assert "b_A:" in content
@@ -280,7 +280,7 @@ def test_log_orientation_solution_can_filter_to_chosen_samples(tmp_path):
     estimator.set_debug_log_path(log_path, sample_indices={2})
     estimator.last_orientation_solve_debug = {
         "gauss_newton_refinement_enabled": False,
-        "R_BA": np.eye(3),
+        "R_AB": np.eye(3),
         "a_A": np.array([1.0, 0.0, 0.0]),
         "b_B": np.array([0.0, 1.0, 0.0]),
         "b_A": np.array([0.0, 1.0, 0.0]),

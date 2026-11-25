@@ -1,27 +1,26 @@
-import pandas_gbq
 from pandas import DataFrame, to_datetime
 from src.angle_calculation.calculations import sort_session_samples
+from src.config import get_settings
 from src.utils.logger import get_logger
-from src.utils.helpers import require_env
-
-from logging import getLogger
 
 
 logger = get_logger()
-getLogger("pandas_gbq").parent = logger
-getLogger("pandas_gbq").propagate = True
 
 
-PROJECT_ID = require_env("PROJECT_ID")
-OUTPUT_DATASET = require_env("OUTPUT_DATASET")
-IMU_READINGS_TABLE = require_env("IMU_READINGS_TABLE")
-CALCULATED_ANGLES_TABLE = require_env("CALCULATED_ANGLES_TABLE")
-
-IMU_READINGS_TABLE = f"{PROJECT_ID}.{OUTPUT_DATASET}.{IMU_READINGS_TABLE}"
-CALCULATED_ANGLES_TABLE = f"{PROJECT_ID}.{OUTPUT_DATASET}.{CALCULATED_ANGLES_TABLE}"
+def _tables():
+    settings = get_settings()
+    settings.require("imu_readings_table", "calculated_angles_table")
+    return (
+        settings.project_id,
+        settings.bq_table(settings.imu_readings_table),
+        settings.bq_table(settings.calculated_angles_table),
+    )
 
 
 def get_angles_df(session_id: str):
+    import pandas_gbq
+
+    PROJECT_ID, _, CALCULATED_ANGLES_TABLE = _tables()
     query = f"""
     SELECT * 
     FROM `{CALCULATED_ANGLES_TABLE}`
@@ -33,6 +32,9 @@ def get_angles_df(session_id: str):
 
 
 def get_imu_reading_df(session_id: str):
+    import pandas_gbq
+
+    PROJECT_ID, IMU_READINGS_TABLE, _ = _tables()
     query = f"""
     SELECT * 
     FROM `{IMU_READINGS_TABLE}`
@@ -54,6 +56,9 @@ def get_imu_reading_df(session_id: str):
 def load_calculated_angles(df: DataFrame):
     """Loads specific rehab metrics back to BigQuery and returns the df back"""
 
+    import pandas_gbq
+
+    PROJECT_ID, _, CALCULATED_ANGLES_TABLE = _tables()
     angles_df = df[['session_id', 'flexion_deg', 'pronation_deg', 'esp32_ms_A']]
 
     pandas_gbq.to_gbq(

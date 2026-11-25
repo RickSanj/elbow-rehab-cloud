@@ -1,7 +1,6 @@
 from src.models.data_models import ReportSchema
 from pandas import DataFrame
 import numpy as np
-import pandas as pd
 from scipy.signal import medfilt
 
 from src.angle_calculation.calculations import prepare_final_angle_columns

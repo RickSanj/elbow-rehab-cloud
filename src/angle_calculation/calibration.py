@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import time
-from dataclasses import dataclass
 from .settings import DEFAULT_CALIBRATION_DURATION_FRAMES
 from src.analytics.raw_data_plots import (
     plot_imu_readings,

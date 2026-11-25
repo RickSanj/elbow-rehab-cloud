@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime
 from src.angle_calculation.filters.EKF import ExtendedKalmanFilter
 from src.angle_calculation.filters.Mahony import MahonyFilter
 from src.angle_calculation.filters.madgwick import MadgwickFilter
@@ -15,10 +14,9 @@ from src.angle_calculation.settings import (
 )
 
 from src.angle_calculation.calibration import calibrate_gyro_acc
-from src.analytics.raw_data_plots import get_file_path, plot_angles, plot_orientation
+from src.analytics.raw_data_plots import get_file_path, plot_angles
 from src.analytics.quaternion_diagnostics import write_quaternion_diagnostics_report
 from src.analytics.settings_info import write_settings_info_report
-from src.angle_calculation.preprocess import ema_filter
 
 
 def normalize_fe(angle_deg: float) -> float:

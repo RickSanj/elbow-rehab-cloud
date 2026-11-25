@@ -459,7 +459,7 @@ class AlignmentFreeElbowEstimator:
         ]
         self.append_debug_log(
             f"sample: {self.debug_sample_index}",
-            f"selected_for_detailed_logging: True",
+            "selected_for_detailed_logging: True",
             f"alpha raw (rad): {alpha}",
             f"beta raw  (rad): {beta}",
             f"alpha deg: {np.rad2deg(alpha)}",

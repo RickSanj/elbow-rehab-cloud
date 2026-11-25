@@ -1,12 +1,7 @@
-import os
 from google.cloud import bigquery
 from google.api_core.exceptions import NotFound  # pyright: ignore[reportMissingImports]
+from src.config import get_settings
 from src.utils.logger import get_logger
-from src.utils.helpers import require_env
-
-PROJECT_ID = require_env("PROJECT_ID")
-OUTPUT_DATASET = require_env("OUTPUT_DATASET")
-IMU_READINGS_TABLE = require_env("IMU_READINGS_TABLE")
 
 
 logger = get_logger()
@@ -22,7 +17,9 @@ def get_bq_client():
 
 
 def get_table_id() -> str:
-    return f"{PROJECT_ID}.{OUTPUT_DATASET}.{IMU_READINGS_TABLE}"
+    settings = get_settings()
+    settings.require("imu_readings_table")
+    return settings.bq_table(settings.imu_readings_table)
 
 
 def ensure_infrastructure_exists(
