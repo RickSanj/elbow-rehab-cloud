@@ -71,16 +71,25 @@ ZERO_POSE_T = 4.0
 HOLD_END = 8.0
 
 
+RAMP_S = 2.0  # smooth hold -> motion transition (a step would be invisible to a gyro)
+
+
+def _blend(t, hold, move):
+    u = np.clip((np.asarray(t, dtype=float) - HOLD_END) / RAMP_S, 0.0, 1.0)
+    w = u * u * (3 - 2 * u)  # smoothstep
+    return (1 - w) * hold + w * move
+
+
 def fe_truth(t):
     t = np.asarray(t, dtype=float)
     move = 70 + 35 * np.sin(2 * np.pi * 0.21 * t) + 15 * np.sin(2 * np.pi * 0.53 * t + 0.4)
-    return np.where(t < HOLD_END, 15.0, move)
+    return _blend(t, 15.0, move)
 
 
 def ps_truth(t):
     t = np.asarray(t, dtype=float)
     move = 30 * np.sin(2 * np.pi * 0.13 * t + 1.0) + 15 * np.sin(2 * np.pi * 0.37 * t)
-    return np.where(t < HOLD_END, 0.0, move)
+    return _blend(t, 0.0, move)
 
 
 @dataclass
