@@ -359,6 +359,13 @@ class AlignmentFreeElbowEstimator:
         self.last_orientation_solve_debug: dict[str, object] = {}
         self.use_gauss_newton_refinement = True
 
+        # Angle extraction relative to a reference orientation (see
+        # solve_angles_referenced). False keeps the original absolute solve
+        # (R_AB ~ exp(alpha a) exp(beta b), no mounting rotation) for comparison.
+        self.use_referenced_solve = True
+        self.R_ref: np.ndarray | None = None
+        self.ref_angles = np.zeros(2)  # warm start [d_alpha, d_beta]
+
     def unwrap(self, angle, prev_angle):
         if prev_angle is None:
             return angle
@@ -977,6 +984,14 @@ class AlignmentFreeElbowEstimator:
         # Single-sample gradient step on axes
         self.gradient_step(R_AB, omega_r_A)
 
+        if self.use_referenced_solve:
+            if self.R_ref is None:
+                # No zero pose yet: angles are relative to the first sample.
+                self.R_ref = R_AB.copy()
+            d_alpha, d_beta = self.solve_angles_referenced(R_AB)
+            self.alpha_prev, self.beta_prev = d_alpha, d_beta
+            return np.rad2deg(d_alpha), np.rad2deg(d_beta)
+
         # Angles from orientation with current axes
         alpha, beta = self.solve_angles_from_orientation(R_AB)
         self.log_orientation_solution(alpha, beta)
@@ -994,9 +1009,49 @@ class AlignmentFreeElbowEstimator:
 
         return np.rad2deg(alpha), np.rad2deg(beta)
 
+    def solve_angles_referenced(
+        self, R_AB: np.ndarray, max_iterations: int = 10, tol: float = 1e-9
+    ) -> tuple[float, float]:
+        """Angle changes since the reference orientation ``R_ref``.
+
+        Joint model (FE axis ``a_A`` fixed in A, PS axis ``b_B`` fixed in B,
+        unknown constant mounting rotation ``C``):
+
+            R_AB = exp(alpha a_A) C exp(beta b_B)
+
+        With ``R_ref = R_AB`` at the reference pose the unknown ``C`` cancels:
+
+            R_AB R_ref^T = exp(d_alpha a_A) exp(d_beta c),   c = R_ref b_B
+
+        Solved by Gauss-Newton, warm-started from the previous sample. With
+        E = exp(d_alpha a) exp(d_beta c) and r = log(E^T R_AB R_ref^T), the
+        first-order model is r(d + delta) = r - [E^T a, c] delta.
+        """
+        a_A, b_B = self.current_axes()
+        c = self.R_ref @ b_B
+        target = R_AB @ self.R_ref.T
+        x = self.ref_angles.copy()
+        for _ in range(max_iterations):
+            E = exp_so3(x[0] * a_A) @ exp_so3(x[1] * c)
+            r = log_so3(E.T @ target)
+            J = np.column_stack([E.T @ a_A, c])
+            delta, *_ = np.linalg.lstsq(J, r, rcond=None)
+            x = x + delta
+            if float(delta @ delta) < tol:
+                break
+        self.ref_angles = x
+        return float(x[0]), float(x[1])
+
     def set_zero_pose(self, R_A: np.ndarray, R_B: np.ndarray):
         """Call once when user is in your 'zero pose' to store offsets."""
         R_AB = R_A.T @ R_B
+        if self.use_referenced_solve:
+            # Angles are measured as changes from this orientation.
+            self.R_ref = R_AB.copy()
+            self.ref_angles = np.zeros(2)
+            self.has_zero = True
+            logger.debug("Zero pose set (referenced solve)")
+            return
         alpha, beta = self.solve_angles_from_orientation(R_AB)
         logger.debug("Zero pose set: alpha0=%.4f rad, beta0=%.4f rad", alpha, beta)
         self.alpha0 = alpha

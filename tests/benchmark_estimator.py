@@ -16,6 +16,9 @@ Errors are measured on raw estimator output (degrees, no folding) against
 the true angle change since the zero pose, after a warm-up period. Because
 the estimated joint axes may point either way, each angle is also scored
 with flipped sign and the better sign is reported.
+
+Estimators: the original absolute angle solve vs the referenced solve
+(default), each with learned axes and with the true axes injected.
 """
 
 from __future__ import annotations
@@ -26,9 +29,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from scipy.optimize import least_squares
-
-from src.angle_calculation.estimator import AlignmentFreeElbowEstimator, exp_so3, log_so3
+from src.angle_calculation.estimator import AlignmentFreeElbowEstimator
 from src.processing.axes import GYRO_COLUMNS, to_filter_frame
 from src.processing.bias import estimate_bias, remove_gyro_bias
 from src.processing.fusion import run_fusion
@@ -52,57 +53,19 @@ TRUE_A = M_A.inv().apply([0.0, 0.0, 1.0])  # FE axis in A
 TRUE_B = M_B.inv().apply([0.0, 1.0, 0.0])  # PS axis in B
 
 
-class TrueAxesEstimator(AlignmentFreeElbowEstimator):
-    """Current angle solver, but with the true axes (no axis learning)."""
+def make_estimator(referenced: bool, true_axes: bool) -> AlignmentFreeElbowEstimator:
+    """referenced=False: the original absolute angle solve (for comparison)."""
+    est = AlignmentFreeElbowEstimator(100.0)
+    est.use_referenced_solve = referenced
+    if true_axes:
+        def spherical(v):
+            return float(np.arccos(np.clip(v[2], -1, 1))), float(np.arctan2(v[1], v[0]))
 
-    def current_axes(self):
-        return TRUE_A.copy(), TRUE_B.copy()
+        est.theta_a, est.rho_a = spherical(TRUE_A)
+        est.theta_b, est.rho_b = spherical(TRUE_B)
+        est.min_axis_speed = np.inf  # no axis learning
+    return est
 
-    def gradient_step(self, R_AB, omega_r_A):
-        return 0.0, 0.0, 0.0, 0.0
-
-
-class ReferencedEstimator(AlignmentFreeElbowEstimator):
-    """EXPERIMENT: decompose relative to the reference orientation R0.
-
-    R_AB @ R0.T = exp(da * a_A) @ exp(db * (R0 @ b_B)), R0 = R_AB at the zero
-    pose (before it: the first sample). Returns angle changes since R0.
-    """
-
-    def __init__(self, *args, true_axes=False, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.R0 = None
-        self.true_axes = true_axes
-        self.x = np.zeros(2)
-
-    def current_axes(self):
-        if self.true_axes:
-            return TRUE_A.copy(), TRUE_B.copy()
-        return super().current_axes()
-
-    def gradient_step(self, R_AB, omega_r_A):
-        if self.true_axes:
-            return 0.0, 0.0, 0.0, 0.0
-        return super().gradient_step(R_AB, omega_r_A)
-
-    def set_zero_pose(self, R_A, R_B):
-        self.R0 = R_A.T @ R_B
-        self.x = np.zeros(2)
-
-    def update_angles(self, R_A, gyro_A, R_B, gyro_B):
-        R_AB, omega_r_A = self.relative(R_A, R_B, gyro_A, gyro_B)
-        self.gradient_step(R_AB, omega_r_A)
-        if self.R0 is None:
-            self.R0 = R_AB
-        a_A, b_B = self.current_axes()
-        c = self.R0 @ b_B
-        target = R_AB @ self.R0.T
-
-        def residual(x):
-            return log_so3((exp_so3(x[0] * a_A) @ exp_so3(x[1] * c)).T @ target)
-
-        self.x = least_squares(residual, self.x).x  # warm start from the last sample
-        return np.rad2deg(self.x[0]), np.rad2deg(self.x[1])
 
 ZERO_POSE_T = 4.0
 HOLD_END = 8.0
@@ -234,13 +197,13 @@ def main(argv=None):
         "c_pipeline": (full_fa, on_a.gyro, full_fb, on_b.gyro),
     }
     estimators = {
-        "current": lambda: AlignmentFreeElbowEstimator(100.0),
-        "current+true_axes": lambda: TrueAxesEstimator(100.0),
-        "referenced+true_axes": lambda: ReferencedEstimator(100.0, true_axes=True),
-        "referenced+learned": lambda: ReferencedEstimator(100.0),
+        "old_absolute+learned": lambda: make_estimator(False, False),
+        "old_absolute+true_axes": lambda: make_estimator(False, True),
+        "referenced+true_axes": lambda: make_estimator(True, True),
+        "referenced+learned": lambda: make_estimator(True, False),
     }
     print(f"duration {args.duration:.0f} s, warm-up {args.warmup:.0f} s, seed {args.seed}")
-    header = f"{'input':<11} {'estimator':<21} {'FE rmse':>8} {'FE max':>7} {'sign':>4}   {'PS rmse':>8} {'PS max':>7} {'sign':>4}  axis err A/B"
+    header = f"{'input':<11} {'estimator':<23} {'FE rmse':>8} {'FE max':>7} {'sign':>4}   {'PS rmse':>8} {'PS max':>7} {'sign':>4}  axis err A/B"
     print(header)
     for input_name, (r_a, g_a, r_b, g_b) in inputs.items():
         for est_name, make in estimators.items():
@@ -250,7 +213,7 @@ def main(argv=None):
             s = score(input_name, grid, alpha, beta, args.warmup)
             a_axis, b_axis = est.current_axes()
             print(
-                f"{input_name:<11} {est_name:<21} {s.fe_rmse:8.2f} {s.fe_max:7.1f} {s.fe_sign:4d}   "
+                f"{input_name:<11} {est_name:<23} {s.fe_rmse:8.2f} {s.fe_max:7.1f} {s.fe_sign:4d}   "
                 f"{s.ps_rmse:8.2f} {s.ps_max:7.1f} {s.ps_sign:4d}  {axis_error_deg(a_axis, TRUE_A):5.1f}/{axis_error_deg(b_axis, TRUE_B):5.1f}"
             )
 

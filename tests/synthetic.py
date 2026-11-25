@@ -82,8 +82,11 @@ def elbow_rotations(
     upper_arm: Callable[[np.ndarray], Rotation] = default_upper_arm,
 ) -> tuple[Rotation, Rotation]:
     r_ua = upper_arm(tau)
+    # Intrinsic "ZY": joint = Rz(fe) * Ry(ps). FE about z fixed in the upper
+    # arm, then PS about the forearm's own y axis (fixed in the forearm).
+    # (Lower-case "zy" would be extrinsic, Ry(ps) * Rz(fe): the wrong joint.)
     joint = Rotation.from_euler(
-        "zy", np.column_stack([fe_deg(tau), ps_deg(tau)]), degrees=True
+        "ZY", np.column_stack([fe_deg(tau), ps_deg(tau)]), degrees=True
     )
     return r_ua * M_A, r_ua * joint * M_B
 
