@@ -1,33 +1,34 @@
 import os
 from contextlib import asynccontextmanager
 from http import HTTPStatus
+from pathlib import Path
+
 import uvicorn
 from fastapi import FastAPI
-
-from src.utils.logger import get_logger
-from src.api import sessions, auth, patients
 from fastapi.staticfiles import StaticFiles
 
+from src.api import auth, patients, sessions
+from src.root import ROOT_DIR
+from src.utils.logger import get_logger
+
 logger = get_logger()
-logger.info("Service started successfully")
+
+WEB_DIR = Path(ROOT_DIR).parent / "web"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("=== REGISTERED ROUTES ===")
-    for r in app.routes:
-        methods = ",".join(r.methods or [])
-        print(f"{methods:10s} {r.path}")
-
+    for route in app.routes:
+        methods = ",".join(sorted(getattr(route, "methods", None) or []))
+        logger.info("route %-10s %s", methods, route.path)
+    logger.info("Service started successfully")
     yield
 
 
-app = FastAPI(lifespan=lifespan,
-              title="Elbow Rehab Cloud API",)
+app = FastAPI(lifespan=lifespan, title="Elbow Rehab Cloud API")
 
-app.mount("/auth", StaticFiles(directory="app/web/auth"), name="auth")
-app.mount("/", StaticFiles(directory="app/web", html=True), name="static")
-
+# API routes first. Starlette matches routes in registration order, and a
+# mount at "/" matches every path, so static files must be mounted last.
 app.include_router(sessions.router)
 app.include_router(auth.router)
 app.include_router(patients.router)
@@ -36,6 +37,18 @@ app.include_router(patients.router)
 @app.get("/health", status_code=HTTPStatus.OK)
 def health():
     return {"message": "OK"}
+
+
+def mount_static_files(application: FastAPI, web_dir: Path = WEB_DIR) -> None:
+    """Serve the web pages (doctor login/signup) from absolute paths."""
+    if not (web_dir / "auth").is_dir():
+        logger.warning("Static web directory %s not found; web pages are not served", web_dir)
+        return
+    application.mount("/auth", StaticFiles(directory=web_dir / "auth"), name="auth")
+    application.mount("/", StaticFiles(directory=web_dir, html=True), name="static")
+
+
+mount_static_files(app)
 
 
 if __name__ == "__main__":

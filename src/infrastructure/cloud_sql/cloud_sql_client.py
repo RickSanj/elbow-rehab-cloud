@@ -68,7 +68,7 @@ def create_patient(user_id: str):
                 {"patient_id": user_id},
             )
         except Exception as exc:
-            logger.exception("Patient insert failed: {exc}")
+            logger.exception("Patient insert failed")
             raise exc
 
 def create_doctor(user_id: str):
@@ -84,26 +84,37 @@ def create_doctor(user_id: str):
                 {"doctor_id": user_id},
             )
         except Exception as exc:
-            logger.exception("Doctor insert failed: {exc}")
+            logger.exception("Doctor insert failed")
             raise exc
 
 
 def load_report(report_data: ReportSchema):
     """Loads specific rehab metrics to Cloud SQL."""
-    logger.debug(f"Loading report {report_data.session_id} to reports table")
+    logger.debug("Loading report %s to reports table", report_data.session_id)
 
     engine = get_engine()
-    with engine.connect() as conn:
+    # engine.begin() commits on success (engine.connect() would roll back).
+    # Upsert so a retried request does not create a second report.
+    # Requires sql/postgres/001_v1_reports_unique.sql.
+    with engine.begin() as conn:
         try:
             conn.execute(
                 text("""
                     INSERT INTO reports (session_id, duration, max_flexion, max_extension, max_pronation, max_supination, rep_count, pain_level)
                     VALUES (:session_id, :duration, :max_flexion, :max_extension, :max_pronation, :max_supination, :rep_count, :pain_level)
+                    ON CONFLICT (session_id) DO UPDATE SET
+                        duration = EXCLUDED.duration,
+                        max_flexion = EXCLUDED.max_flexion,
+                        max_extension = EXCLUDED.max_extension,
+                        max_pronation = EXCLUDED.max_pronation,
+                        max_supination = EXCLUDED.max_supination,
+                        rep_count = EXCLUDED.rep_count,
+                        pain_level = COALESCE(EXCLUDED.pain_level, reports.pain_level)
                 """),
                 report_data.model_dump()
             )
         except Exception as exc:
-            logger.exception("Report insert failed: {exc}")
+            logger.exception("Report insert failed")
             raise exc
     return
 
@@ -112,7 +123,7 @@ def update_pain_level(pain_data: PainSchema):
     """Updates pain_level for an existing report row by session_id.
        Raises error if the row does not exist.
     """
-    logger.info(f"Updating pain_level for session_id={pain_data.session_id}")
+    logger.info("Updating pain_level for session_id=%s", pain_data.session_id)
     engine = get_engine()
     with engine.begin() as conn:
         try:
@@ -131,7 +142,7 @@ def update_pain_level(pain_data: PainSchema):
             if result.rowcount == 0:
                 raise ValueError(f"No report found for session_id={pain_data.session_id}")
         except Exception as exc:
-            logger.exception("Pain level insert failed: {exc}")
+            logger.exception("Pain level insert failed")
             raise exc
 
 
@@ -161,7 +172,7 @@ def record_zero_pose_event(zero_pose: ZeroPoseSchema):
                 },
             )
         except Exception as exc:
-            logger.exception("Zero pose insert failed: {exc}")
+            logger.exception("Zero pose insert failed")
             raise exc
 
 
@@ -220,7 +231,7 @@ def create_doctor_patient_link(doctor_id: str, patient_id: str):
                 },
             )
         except Exception as exc:
-            logger.exception("Doctor-patient link creation failed: {exc}")
+            logger.exception("Doctor-patient link creation failed")
             raise exc
 
 
