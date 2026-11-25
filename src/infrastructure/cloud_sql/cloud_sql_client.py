@@ -2,6 +2,7 @@ import os
 from src.models.data_models import ReportSchema
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
+from datetime import datetime, timedelta
 from sqlalchemy import text
 from google.cloud.sql.connector import Connector, IPTypes
 import pg8000
@@ -21,6 +22,7 @@ PROJECT_ID = require_env("PROJECT_ID")
 LOCATION = require_env("LOCATION")
 INSTANCE_NAME = require_env("INSTANCE_NAME")
 instance_connection_name = f"{PROJECT_ID}:{LOCATION}:{INSTANCE_NAME}"
+
 
 def connect_with_connector() -> sqlalchemy.engine.Engine:
     """
@@ -54,6 +56,7 @@ def connect_with_connector() -> sqlalchemy.engine.Engine:
 
 _engine = None
 
+
 def get_engine():
     global _engine
     if _engine is None:
@@ -61,7 +64,7 @@ def get_engine():
     return _engine
 
 
-def ensure_patient_exists(user_id: str):
+def create_patient(user_id: str):
     engine = get_engine()
     with engine.begin() as conn:
         try:
@@ -73,9 +76,26 @@ def ensure_patient_exists(user_id: str):
                 """),
                 {"patient_id": user_id},
             )
-        except Exception as e:
-            logger.exception("Pain level insert failed: {e}")
-            raise
+        except Exception as exc:
+            logger.exception("Patient insert failed: {exc}")
+            raise exc
+
+def create_doctor(user_id: str):
+    engine = get_engine()
+    with engine.begin() as conn:
+        try:
+            conn.execute(
+                text("""
+                    INSERT INTO doctors (doctor_id)
+                    VALUES (:doctor_id)
+                    ON CONFLICT (doctor_id) DO NOTHING
+                """),
+                {"doctor_id": user_id},
+            )
+        except Exception as exc:
+            logger.exception("Doctor insert failed: {exc}")
+            raise exc
+
 
 def load_report(report_data: ReportSchema):
     """Loads specific rehab metrics to Cloud SQL."""
@@ -91,9 +111,9 @@ def load_report(report_data: ReportSchema):
                 """),
                 report_data.model_dump()
             )
-        except Exception as e:
-            logger.exception("Report insert failed: {e}")
-            raise
+        except Exception as exc:
+            logger.exception("Report insert failed: {exc}")
+            raise exc
     return
 
 
@@ -119,9 +139,9 @@ def update_pain_level(pain_data: PainSchema):
 
             if result.rowcount == 0:
                 raise ValueError(f"No report found for session_id={pain_data.session_id}")
-        except Exception as e:
-            logger.exception("Pain level insert failed: {e}")
-            raise
+        except Exception as exc:
+            logger.exception("Pain level insert failed: {exc}")
+            raise exc
 
 
 def record_zero_pose_event(zero_pose: ZeroPoseSchema):
@@ -149,6 +169,103 @@ def record_zero_pose_event(zero_pose: ZeroPoseSchema):
                     "zero_pose_at": zero_pose.zero_pose_timestamp_iso,
                 },
             )
-        except Exception as e:
-            logger.exception("Zero pose insert failed: {e}")
-            raise
+        except Exception as exc:
+            logger.exception("Zero pose insert failed: {exc}")
+            raise exc
+
+
+def patient_exists(user_id: str) -> bool:
+    """Return True if patient with such user_id exists"""
+    engine = get_engine()
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("""
+                SELECT 1 FROM patients WHERE patient_id = :patient_id
+            """),
+            {"patient_id": user_id},
+        )
+        return result.fetchone() is not None
+
+
+def doctor_exists(user_id: str) -> bool:
+    """Return True if doctor with such user_id exists"""
+    engine = get_engine()
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("""
+                SELECT 1 FROM doctors WHERE doctor_id = :doctor_id
+            """),
+            {"doctor_id": user_id},
+        )
+        return result.fetchone() is not None
+
+def create_doctor_patient_link(doctor_id: str, patient_id: str):
+    """Create doctor patient link. Raises ValueError if patient or doctor doesn't exist."""
+    logger.info(
+        "Creating doctor-patient link for doctor_id=%s and patient_id=%s",
+        doctor_id,
+        patient_id
+    )
+
+    engine = get_engine()
+
+    with engine.connect() as conn:
+        if not patient_exists(patient_id):
+            raise ValueError(f"Patient with patient_id={patient_id} does not exist")
+
+        if not doctor_exists(doctor_id):
+            raise ValueError(f"Doctor with doctor_id={doctor_id} does not exist")
+
+    with engine.begin() as conn:
+        try:
+            conn.execute(
+                text("""
+                    INSERT INTO doctor_patient_link (patient_id, doctor_id)
+                    VALUES (:patient_id, :doctor_id)
+                """),
+                {
+                    "patient_id": patient_id,
+                    "doctor_id": doctor_id,
+                },
+            )
+        except Exception as exc:
+            logger.exception("Doctor-patient link creation failed: {exc}")
+            raise exc
+
+
+def save_token(token: str, patient_id: str, ttl_hours: int = 24):
+    """Save invite token with expiration."""
+
+    engine = get_engine()
+    expires_at = datetime.utcnow() + timedelta(hours=ttl_hours)
+
+    with engine.begin() as conn:
+        conn.execute(
+            text("""
+                INSERT INTO invite_tokens (token, patient_id, expires_at)
+                VALUES (:token, :patient_id, :expires_at)
+            """),
+            {
+                "token": token,
+                "patient_id": patient_id,
+                "expires_at": expires_at,
+            },
+        )
+
+def get_patient_id_from_token(token: str) -> str | None:
+    engine = get_engine()
+
+    with engine.begin() as conn:
+        result = conn.execute(
+            text("""
+                UPDATE invite_tokens
+                SET is_used = TRUE
+                WHERE token = :token
+                  AND is_used = FALSE
+                  AND expires_at > NOW()
+                RETURNING patient_id
+            """),
+            {"token": token},
+        ).fetchone()
+
+        return result[0] if result else None

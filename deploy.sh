@@ -24,6 +24,7 @@ gcloud run deploy ${SERVICE_NAME} \
   --image europe-central2-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${SERVICE_NAME}:latest \
   --region=${LOCATION} \
   --allow-unauthenticated \
+  --memory 1Gi \
   --add-cloudsql-instances=${PROJECT_ID}:${LOCATION}:${INSTANCE_NAME} \
   --set-env-vars="^|^\
 PROJECT_ID=${PROJECT_ID}|\

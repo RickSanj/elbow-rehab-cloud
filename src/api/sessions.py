@@ -9,7 +9,8 @@ from src.angle_calculation.calculations import ElbowTracker, get_sample_rate
 from src.infrastructure.cloud_sql.cloud_sql_client import (
     load_report,
     record_zero_pose_event,
-    ensure_patient_exists,
+    create_patient,
+    patient_exists,
 )
 from src.infrastructure.bigquery.bigquery_operations import (
     get_imu_reading_df,
@@ -89,7 +90,8 @@ def record_zero_pose_timestamp(
     zero_pose.user_id = user_id
     zero_pose.session_id = f"{user_id}_{zero_pose.session_time_iso}"
 
-    ensure_patient_exists(user_id)
+    if not patient_exists(user_id):
+        create_patient(user_id)
     record_zero_pose_event(zero_pose)
 
     return {
@@ -112,11 +114,16 @@ async def ingest_imu_readings(
     for reading in raw_readings:
         reading.user_id = user_id
         reading.session_id = f"{user_id}_{reading.session_time_iso}"
-        # Swap z axis
-        reading.az_A *= -1
-        reading.gz_A *= -1
-        reading.az_B *= -1
-        reading.gz_B *= -1
+        # Swap values, because z axis is swapped
+        reading.ax_A *= -1
+        reading.gx_A *= -1
+        reading.ax_B *= -1
+        reading.gx_B *= -1
+
+        reading.ay_A *= -1
+        reading.gy_A *= -1
+        reading.ay_B *= -1
+        reading.gy_B *= -1
         rows_to_insert.append(reading.model_dump(mode="json"))
 
     logger.info(f"Inserting {len(rows_to_insert)} readings for user {user_id}")

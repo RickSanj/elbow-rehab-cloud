@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Elbow Rehab - Doctor Dashboard</title>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script src="auth/auth.js"></script>
+    <script>
+      // Check authentication and route accordingly
+      window.addEventListener('DOMContentLoaded', () => {
+        setApiUrl('https://elbow-rehab-service-1086744305186.europe-central2.run.app');
+        
+        const token = localStorage.getItem('token');
+
+        if (!token) {
+          // Not authenticated, redirect to login
+          window.location.href = 'auth/login.html';
+          return;
+        }
+
+        // Authenticated, load React app
+        console.log('User authenticated. Loading dashboard...');
+        loadReactApp();
+      });
+
+      function loadReactApp() {
+        // This will be replaced by your React app
+        // For now, show a loading message
+        document.getElementById('root').innerHTML = `
+          <div style="
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-family: system-ui, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+          ">
+            <div style="text-align: center;">
+              <div style="font-size: 48px; margin-bottom: 16px;">💪</div>
+              <h1>Elbow Rehab Dashboard</h1>
+              <p style="margin-top: 16px; opacity: 0.9;">
+                Loading dashboard...
+              </p>
+              <div style="
+                margin-top: 32px;
+                width: 40px;
+                height: 40px;
+                border: 3px solid rgba(255,255,255,0.3);
+                border-radius: 50%;
+                border-top-color: white;
+                animation: spin 1s linear infinite;
+                margin-left: auto;
+                margin-right: auto;
+              "></div>
+              <style>
+                @keyframes spin {
+                  to { transform: rotate(360deg); }
+                }
+              </style>
+            </div>
+          </div>
+        `;
+
+        // In production, load the React app here
+        // loadScript('public/index.html');
+        // For now, you can uncomment below to load the React dashboard
+
+        // Uncomment the line below after setting up React build:
+        // loadDashboard();
+      }
+
+      function loadDashboard() {
+        // Load React app - this is a placeholder
+        // Replace with your actual React app loading logic
+        setTimeout(() => {
+          window.location.href = 'dashboard.html';
+        }, 2000);
+      }
+    </script>
+  </body>
+</html>

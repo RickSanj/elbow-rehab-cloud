@@ -3,7 +3,6 @@ from pydantic import BaseModel
 class SignupSchema(BaseModel):
     email: str
     password: str
-    patient_id: str | None = None
 
     class Config:
         schema_extra = {
@@ -24,3 +23,8 @@ class LoginSchema(BaseModel):
                 "password": "examplepassword123",
             }
         }
+
+class SignupResponse(BaseModel):
+    message: str
+    doctor_id: str
+    warning: str | None = None

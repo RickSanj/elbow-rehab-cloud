@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign Up - Elbow Rehab</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="auth-container">
+      <div class="auth-card">
+        <div class="auth-header">
+          <div class="app-logo">💪</div>
+          <h1 class="app-title">Elbow Rehab</h1>
+          <p class="auth-subtitle">Create Doctor Account</p>
+        </div>
+
+        <!-- Alert messages -->
+        <div id="alertContainer"></div>
+
+        <!-- Signup form -->
+        <form id="signupForm">
+          <div class="form-group">
+            <label for="email">Email Address</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              placeholder="doctor@example.com"
+              required
+            />
+            <span class="error-message">Please enter a valid email</span>
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              placeholder="At least 8 characters"
+              minlength="8"
+              required
+            />
+            <span class="error-message">
+              Password must be at least 8 characters
+            </span>
+          </div>
+
+          <div class="form-group">
+            <label for="confirmPassword">Confirm Password</label>
+            <input
+              type="password"
+              id="confirmPassword"
+              name="confirmPassword"
+              placeholder="Repeat password"
+              required
+            />
+            <span class="error-message">Passwords do not match</span>
+          </div>
+
+          <div class="checkbox-group">
+            <input type="checkbox" id="terms" name="terms" required />
+            <label for="terms">
+              I agree to the
+              <a href="#" style="color: var(--primary-color); text-decoration: none;">
+                Terms of Service
+              </a>
+            </label>
+          </div>
+
+          <button type="submit" class="submit-btn" id="submitBtn">
+            Create Account
+          </button>
+        </form>
+
+        <div class="divider">Or</div>
+
+        <div class="auth-footer">
+          <p>
+            Already have an account?
+            <a href="login.html">Sign in here</a>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <script src="auth.js"></script>
+    <script>
+      // Signup-specific logic
+      const signupForm = document.getElementById('signupForm');
+      const submitBtn = document.getElementById('submitBtn');
+      const alertContainer = document.getElementById('alertContainer');
+
+      signupForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+        const confirmPassword = document.getElementById(
+          'confirmPassword'
+        ).value;
+        const termsAccepted = document.getElementById('terms').checked;
+
+        // Clear previous errors
+        document.querySelectorAll('input').forEach((input) => {
+          input.classList.remove('error');
+        });
+
+        // Validate email
+        if (!isValidEmail(email)) {
+          showAlert('Please enter a valid email address', 'error');
+          document.getElementById('email').classList.add('error');
+          return;
+        }
+
+        // Validate password length
+        if (password.length < 8) {
+          showAlert('Password must be at least 8 characters', 'error');
+          document.getElementById('password').classList.add('error');
+          return;
+        }
+
+        // Validate password match
+        if (password !== confirmPassword) {
+          showAlert('Passwords do not match', 'error');
+          document.getElementById('confirmPassword').classList.add('error');
+          return;
+        }
+
+        // Validate terms
+        if (!termsAccepted) {
+          showAlert('You must accept the terms to continue', 'error');
+          return;
+        }
+
+        // Submit
+        await submitSignup(email, password);
+      });
+
+      async function submitSignup(email, password) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML =
+          '<span class="spinner"></span> Creating account...';
+
+        try {
+          const response = await fetch(
+            `${getApiUrl()}/auth/signup`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                email,
+                password,
+              }),
+            }
+          );
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            showAlert(
+              data.detail ||
+                'Signup failed. Please try again or use a different email.',
+              'error'
+            );
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Create Account';
+            return;
+          }
+
+          // Account created successfully
+          showAlert(
+            'Account created successfully! Redirecting to login...',
+            'success'
+          );
+
+          // Redirect to login after a brief delay
+          setTimeout(() => {
+            window.location.href = 'login.html';
+          }, 1500);
+        } catch (error) {
+          console.error('Signup error:', error);
+          showAlert(
+            'Connection error. Please check your internet and try again.',
+            'error'
+          );
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = 'Create Account';
+        }
+      }
+
+      function showAlert(message, type) {
+        alertContainer.innerHTML = `
+          <div class="alert ${type}">
+            ${type === 'error' ? '❌' : '✅'} ${message}
+          </div>
+        `;
+
+        if (type === 'success') {
+          setTimeout(
+            () => (alertContainer.innerHTML = ''),
+            4000
+          );
+        }
+      }
+
+      // Validate confirm password in real-time
+      document
+        .getElementById('confirmPassword')
+        .addEventListener('input', () => {
+          const password = document.getElementById('password').value;
+          const confirmPassword = document.getElementById(
+            'confirmPassword'
+          ).value;
+
+          if (confirmPassword && password !== confirmPassword) {
+            document
+              .getElementById('confirmPassword')
+              .classList.add('error');
+          } else {
+            document
+              .getElementById('confirmPassword')
+              .classList.remove('error');
+          }
+        });
+    </script>
+  </body>
+</html>

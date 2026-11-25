@@ -4,6 +4,11 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 
+from src.utils.logger import get_logger
+
+logger = get_logger()
+
+
 class SimpleElbowEstimator:
     def __init__(self, sample_rate_hz: float = 100.0):
         pass
@@ -352,7 +357,7 @@ class AlignmentFreeElbowEstimator:
         self.debug_sample_index = 0
         self.debug_sample_indices: set[int] | None = None
         self.last_orientation_solve_debug: dict[str, object] = {}
-        self.use_gauss_newton_refinement = False
+        self.use_gauss_newton_refinement = True
 
     def unwrap(self, angle, prev_angle):
         if prev_angle is None:
@@ -861,11 +866,19 @@ class AlignmentFreeElbowEstimator:
                 d_unclipped,
                 d,
             )
-            alpha_after = alpha_work + float(d[0])
-            beta_after = beta_work + float(d[1])
+            alpha_after = alpha_work - float(d[0])
+            beta_after = beta_work - float(d[1])
             r_err_after, r_err_after_norm = self.orientation_residual(
                 R_AB, a_A, b_A, alpha_after, beta_after
             )
+            if r_err_after_norm < r_err_norm:
+                # Accept step
+                alpha_work = alpha_after
+                beta_work  = beta_after
+            else:
+                # Reject step → stop refinement
+                break
+
             gauss_newton_steps.append(
                 {
                     "iteration": iteration + 1,
@@ -984,6 +997,8 @@ class AlignmentFreeElbowEstimator:
     def set_zero_pose(self, R_A: np.ndarray, R_B: np.ndarray):
         """Call once when user is in your 'zero pose' to store offsets."""
         R_AB = R_A.T @ R_B
+        print("+++++++++++++++++++")
+        logger.info("+++++++++++++++++++")
         alpha, beta = self.solve_angles_from_orientation(R_AB)
         self.alpha0 = alpha
         self.beta0 = beta

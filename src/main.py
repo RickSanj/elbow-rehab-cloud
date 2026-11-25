@@ -5,7 +5,8 @@ import uvicorn
 from fastapi import FastAPI
 
 from src.utils.logger import get_logger
-from src.api import sessions, auth
+from src.api import sessions, auth, patients
+from fastapi.staticfiles import StaticFiles
 
 logger = get_logger()
 logger.info("Service started successfully")
@@ -24,8 +25,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan,
               title="Elbow Rehab Cloud API",)
 
+app.mount("/auth", StaticFiles(directory="app/web/auth"), name="auth")
+app.mount("/", StaticFiles(directory="app/web", html=True), name="static")
+
 app.include_router(sessions.router)
 app.include_router(auth.router)
+app.include_router(patients.router)
 
 
 @app.get("/health", status_code=HTTPStatus.OK)

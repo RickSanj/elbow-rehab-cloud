@@ -240,12 +240,14 @@ class ElbowTracker:
             R_A = self.filter_a.rotation_matrix()
             R_B = self.filter_b.rotation_matrix()
 
-            if (not self.zero_pose_set and
-                self.zero_pose_timestamp_iso is not None and
-                row["session_time_iso"] >= self.zero_pose_timestamp_iso):
-                
-                self.estimator.set_zero_pose(R_A, R_B)
-                self.zero_pose_set = True
+            row_ts = pd.to_datetime(row["session_time_iso"], utc=True)
+            zero_ts = pd.to_datetime(self.zero_pose_timestamp_iso, utc=True)
+            print("ZERO:", zero_ts)
+            print("MIN:", row["session_time_iso"])
+            if not self.zero_pose_set and pd.notna(zero_ts):
+                if row_ts >= zero_ts:
+                    self.estimator.set_zero_pose(R_A, R_B)
+                    self.zero_pose_set = True
 
             flex, pron = self.estimator.update_angles(R_A, gyro_a, R_B, gyro_b)
             # flexions.append(normalize_fe(flex))
