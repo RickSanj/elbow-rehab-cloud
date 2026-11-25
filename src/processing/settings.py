@@ -1,8 +1,4 @@
-"""Constants of the v2 processing pipeline and the quality thresholds.
-
-Thresholds marked "confirm" are defaults from the task description that the
-thesis author still has to confirm.
-"""
+"""Constants of the v2 processing pipeline and the quality thresholds."""
 
 # Common time grid for both sensors.
 GRID_HZ = 100.0
@@ -31,7 +27,7 @@ REST_MAX_GYRO_STD = 0.05  # rad/s, mean per-axis std
 # Default AHRS filter for v2 processing (same as v1: "ekf").
 DEFAULT_FILTER = "ekf"
 
-# Quality thresholds (confirm).
+# Quality thresholds: quality_ok is false when any is exceeded.
 QUALITY_MAX_LOSS_PCT = 2.0
 QUALITY_MIN_OVERLAP_RATIO = 0.90
 QUALITY_MAX_CLOCK_RESIDUAL_MS = 5.0

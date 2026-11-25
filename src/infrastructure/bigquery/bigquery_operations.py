@@ -45,8 +45,20 @@ def session_param(session_id: str) -> bigquery.QueryJobConfig:
 
 
 def rows_to_dataframe(rows) -> pd.DataFrame:
-    """Convert a BigQuery row iterator to a DataFrame without pyarrow."""
-    return pd.DataFrame([dict(row.items()) for row in rows])
+    """Convert a BigQuery row iterator to a DataFrame without pyarrow.
+
+    Rows are collected as tuples (not one dict per row) to keep memory low
+    for long sessions.
+    """
+    columns = None
+    records = []
+    for row in rows:
+        if columns is None:
+            columns = list(row.keys())
+        records.append(tuple(row.values()))
+    if columns is None:
+        return pd.DataFrame()
+    return pd.DataFrame.from_records(records, columns=columns)
 
 
 def get_angles_df(session_id: str) -> pd.DataFrame:

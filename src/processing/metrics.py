@@ -2,7 +2,7 @@
 
 Smoothness: SPARC (spectral arc length, Balasubramanian et al. 2015) of the
 flexion speed profile, computed per detected repetition and averaged. Values
-are negative; closer to 0 is smoother. (Default chosen per the task; confirm.)
+are negative; closer to 0 is smoother.
 """
 
 from __future__ import annotations

@@ -1,21 +1,41 @@
-.idea
+# Secrets: never bake keys or env files into the image.
 .env
-gha-creds-*.json
-target
-*.iml
-**/avro/generated
-.DS_Store
-venv
+.env.*
 .envrc
-.ruff_cache
-*.egg-info
+config/credentials.json
+config/*.json
+**/*credentials*.json
+gha-creds-*.json
+
+# Local data, results and experiments
+data/
+src/analytics/data/
+*.ipynb
+debug.txt
+
+# Tests and tooling
+tests/
+.pytest_cache
 *.pytest_cache
+.ruff_cache
 __pycache__
-.git
-.gitignore
-.git/
-.data
-.venv/
-venv/
-env/
 *.pyc
+
+# Environments
+venv
+venv/
+venv./
+.venv/
+env/
+*.egg-info
+
+# Editors, VCS, misc
+.idea
+.vscode
+*.iml
+.DS_Store
+.git
+.git/
+.gitignore
+target
+**/avro/generated

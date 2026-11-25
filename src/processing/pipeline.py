@@ -45,7 +45,7 @@ class PipelineResult:
 
 
 def select_zero_pose(zero_pose_uptimes: list[float]) -> float | None:
-    """Several zero poses in one session: use the last one (default; confirm)."""
+    """Several zero poses in one session: the last one defines zero."""
     return max(zero_pose_uptimes) if zero_pose_uptimes else None
 
 

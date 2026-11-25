@@ -1,3 +1,7 @@
+> **Note (v2):** this is a general background guide. The deployment that
+> matches production is `deploy.sh` (see README.md). `DB_PASS` now comes from
+> Secret Manager and `cloudbuild.yaml` was removed.
+
 # Cloud Infrastructure Deployment Guide
 
 Complete instructions for deploying the Elbow Rehab application to Google Cloud Platform (GCP).

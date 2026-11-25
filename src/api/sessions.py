@@ -54,7 +54,8 @@ def calculate_angles(session_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
 
     elbow_tracker = ElbowTracker(sample_rate=get_sample_rate(session_data))
-    processed_df = elbow_tracker.process_session_angles(session_data)
+    # No plots or files from inside a request (and no matplotlib on Cloud Run).
+    processed_df = elbow_tracker.process_session_angles(session_data, persist=False, visualize=False)
     angles_df = load_calculated_angles(processed_df)
 
     return angles_df
