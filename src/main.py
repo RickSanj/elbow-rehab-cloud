@@ -9,7 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.api import auth, patients, sessions
+from src.api import auth, internal, patients, sessions
 from src.api.v2 import sessions as sessions_v2
 from src.root import ROOT_DIR
 from src.utils.logger import get_logger
@@ -33,6 +33,7 @@ app = FastAPI(lifespan=lifespan, title="Elbow Rehab Cloud API")
 # API routes first. Starlette matches routes in registration order, and a
 # mount at "/" matches every path, so static files must be mounted last.
 app.include_router(sessions_v2.router)
+app.include_router(internal.router)
 app.include_router(sessions.router)
 app.include_router(auth.router)
 app.include_router(patients.router)
