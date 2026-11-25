@@ -14,11 +14,15 @@ class MadgwickFilter(BaseFilter):
         super().__init__()
         self.madgwick = Madgwick(frequency=frequency, beta=beta)
 
-    def update(self, acc_data, gyro_data) -> np.ndarray:
+    def _impl(self):
+        return self.madgwick
+
+    def update(self, acc_data, gyro_data, dt: float | None = None) -> np.ndarray:
         """
         Update orientation using Madgwick filter.
         Keeps quaternion in [w, x, y, z] internally.
         """
+        self.set_dt(dt)
         self.quaternion = self.madgwick.updateIMU(
             self.quaternion, gyr=gyro_data, acc=acc_data
         )

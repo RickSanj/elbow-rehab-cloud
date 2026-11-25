@@ -14,9 +14,6 @@ from src.angle_calculation.settings import (
 )
 
 from src.angle_calculation.calibration import calibrate_gyro_acc
-from src.analytics.raw_data_plots import get_file_path, plot_angles
-from src.analytics.quaternion_diagnostics import write_quaternion_diagnostics_report
-from src.analytics.settings_info import write_settings_info_report
 
 
 def normalize_fe(angle_deg: float) -> float:
@@ -102,6 +99,7 @@ def get_filter(filter_type: str, sample_rate: float) -> MadgwickFilter | Extende
         return ExtendedKalmanFilter(frequency=sample_rate)
     if filter_type == "mahony":
         return MahonyFilter(frequency=sample_rate)
+    raise ValueError(f"Unknown filter type: {filter_type!r}")
 
 
 def get_estimator(
@@ -217,6 +215,11 @@ class ElbowTracker:
         calibrated_session_df = sort_session_samples(calibrated_session_df)
         output_dir = None
         if persist or visualize:
+            # Analytics helpers (matplotlib) are only needed for local runs.
+            from src.analytics.quaternion_diagnostics import write_quaternion_diagnostics_report
+            from src.analytics.raw_data_plots import get_file_path, plot_angles
+            from src.analytics.settings_info import write_settings_info_report
+
             output_dir = get_file_path(calibrated_session_df)
         self.estimator.set_debug_log_path(
             output_dir / "angle_debug_log.txt" if output_dir is not None else None,
@@ -240,8 +243,6 @@ class ElbowTracker:
 
             row_ts = pd.to_datetime(row["session_time_iso"], utc=True)
             zero_ts = pd.to_datetime(self.zero_pose_timestamp_iso, utc=True)
-            print("ZERO:", zero_ts)
-            print("MIN:", row["session_time_iso"])
             if not self.zero_pose_set and pd.notna(zero_ts):
                 if row_ts >= zero_ts:
                     self.estimator.set_zero_pose(R_A, R_B)

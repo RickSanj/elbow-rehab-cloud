@@ -13,11 +13,15 @@ class MahonyFilter(BaseFilter):
         super().__init__()
         self.mahony = Mahony(frequency=frequency)
 
-    def update(self, acc_data, gyro_data) -> np.ndarray:
+    def _impl(self):
+        return self.mahony
+
+    def update(self, acc_data, gyro_data, dt: float | None = None) -> np.ndarray:
         """
-        Update orientation using Madgwick filter.
+        Update orientation using the Mahony filter.
         Keeps quaternion in [w, x, y, z] internally.
         """
+        self.set_dt(dt)
         self.quaternion = self.mahony.updateIMU(
             q=self.quaternion, gyr=gyro_data, acc=acc_data
         )

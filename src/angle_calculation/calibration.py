@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
-from .settings import DEFAULT_CALIBRATION_DURATION_FRAMES
-from src.analytics.raw_data_plots import (
-    plot_imu_readings,
-    plot_gyro_calibration,
-    plot_acc_calibration,
-)
-
-
 import numpy as np
+
+from .settings import DEFAULT_CALIBRATION_DURATION_FRAMES
+
+# Accelerometer calibration (bias in m/s^2 and per-axis scale), applied as
+# a_cal = (a_raw - ACC_CAL_BIAS) @ ACC_CAL_SCALE.T to both sensors.
+ACC_CAL_BIAS = np.array([0.43000557, 0.71119793, -0.38784999])
+ACC_CAL_SCALE = np.array(
+    [
+        [1.00430962, 0.0, 0.0],
+        [0.0, 0.99287692, 0.0],
+        [0.0, 0.0, 0.99845489],
+    ]
+)
 
 
 def get_acc_bias(df, cols, stationary_window, g_ms2=9.81):
@@ -61,14 +66,8 @@ def calibrate_gyro_acc(
     accel_cols_A = ["ax_A", "ay_A", "az_A"]
     accel_cols_B = ["ax_B", "ay_B", "az_B"]
 
-    b = np.array([0.43000557, 0.71119793, -0.38784999])
-    S = np.array(
-        [
-            [1.00430962, 0.0, 0.0],
-            [0.0, 0.99287692, 0.0],
-            [0.0, 0.0, 0.99845489],
-        ]
-    )
+    b = ACC_CAL_BIAS
+    S = ACC_CAL_SCALE
 
     calibrated_df = df.copy()
 
@@ -106,6 +105,12 @@ def calibrate_gyro_acc(
     #     calibrated_df[col] = df[col] - bias_df[col]
 
     if visualize:
+        from src.analytics.raw_data_plots import (
+            plot_acc_calibration,
+            plot_gyro_calibration,
+            plot_imu_readings,
+        )
+
         plot_imu_readings(calibrated_df)
         plot_gyro_calibration(df, calibrated_df)
         plot_acc_calibration(df, calibrated_df)
